@@ -3,6 +3,7 @@ from app.utils import config
 
 app = FastAPI(title="Quant50 Portfolio API", version="0.1")
 
+
 @app.get("/")
 def root():
     """
