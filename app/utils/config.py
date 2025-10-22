@@ -1,25 +1,17 @@
+# app/utils/config.py
 import os
-
 from dotenv import load_dotenv
 
-# Cargar el archivo .env desde la raíz del proyecto
+# Cargar variables de entorno
 load_dotenv()
 
-# Variables principales de Alpaca API
-ALPACA_API_KEY_ID = os.getenv("ALPACA_API_KEY_ID")
-ALPACA_API_SECRET_KEY = os.getenv("ALPACA_API_SECRET_KEY")
-ALPACA_BASE_URL = os.getenv(
-    "ALPACA_BASE_URL",
-    "https://paper-api.alpaca.markets",
-)
+# Fuente de datos
+DATA_SOURCE = os.getenv("DATA_SOURCE", "yfinance")
 
-ALPACA_DATA_URL = os.getenv(
-    "ALPACA_DATA_URL",
-    "https://data.alpaca.markets/v2",
-)
-
-# Directorio de reportes
+# Directorios y rutas
 REPORTS_DIR = os.getenv("REPORTS_DIR", "./data/reports")
+DATABASE_PATH = os.getenv("DATABASE_PATH", "./data/market.duckdb")
 
 # Nivel de logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
