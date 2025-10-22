@@ -22,9 +22,7 @@ Project: quant50
 import pandas as pd
 
 
-def fetch_stock_data(symbol: str, 
-                     start_date: str, 
-                     end_date: str) -> pd.DataFrame:
+def fetch_stock_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     """
     Downloads daily OHLCV prices for a symbol using Alpaca Market Data
     API v2.
