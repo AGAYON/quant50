@@ -1,5 +1,6 @@
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
 
 # Cargar el archivo .env desde la raíz del proyecto
 load_dotenv()
