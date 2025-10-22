@@ -25,9 +25,10 @@ jobs:
 
       - name: Code quality checks
         run: |
-          black --check .
-          isort --check-only .
-          flake8 .
+          echo "🧹 Running code formatters and linters..."
+          black --check . || (echo "❌ Black failed" && exit 1)
+          isort --check-only . || (echo "❌ isort failed" && exit 1)
+          flake8 . || (echo "❌ flake8 failed" && exit 1)
 
       - name: Run tests
         run: pytest -v || true
