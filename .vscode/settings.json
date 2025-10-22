@@ -1,0 +1,11 @@
+{
+  "python.defaultInterpreterPath": ".venv/Scripts/python.exe",
+  "python.analysis.autoImportCompletions": true,
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": true
+  },
+  "python.linting.enabled": true,
+  "python.linting.flake8Enabled": true,
+  "python.formatting.provider": "black"
+}

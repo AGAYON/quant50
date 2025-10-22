@@ -1,0 +1,23 @@
+# Core
+fastapi
+uvicorn[standard]
+pandas
+numpy
+requests
+duckdb
+joblib
+python-dotenv
+
+# ML
+lightgbm
+cvxpy
+
+# Reporting
+matplotlib
+fpdf
+
+# Dev tools
+pytest
+black
+flake8
+isort

@@ -1,0 +1,16 @@
+[tool.black]
+line-length = 88
+target-version = ['py311']
+skip-string-normalization = true
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["app"]
+
+[tool.flake8]
+max-line-length = 88
+ignore = [
+    "E203",  # whitespace before ':'
+    "W503"   # line break before binary operator
+]
