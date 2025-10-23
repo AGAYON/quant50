@@ -23,4 +23,4 @@ flake8
 isort
 
 # Data fetching
-yfinance
+yfinance==0.2.37

@@ -44,6 +44,10 @@ def fetch_stock_data(symbol: str, start_date: str, end_date: str) -> pd.DataFram
         pd.DataFrame: DataFrame with columns [Date, Open, High, Low, Close,
                      Adj Close, Volume, Symbol]
     """
+
+    import os
+    os.environ["YFINANCE_USE_CURL_CFFI"] = "false"
+
     try:
         df = yf.download(symbol, start=start_date, end=end_date, progress=False)
         if df.empty:
