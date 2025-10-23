@@ -49,7 +49,14 @@ def fetch_stock_data(symbol: str, start_date: str, end_date: str) -> pd.DataFram
     os.environ["YFINANCE_USE_CURL_CFFI"] = "false"
 
     try:
-        df = yf.download(symbol, start=start_date, end=end_date, progress=False)
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        df = yf.download(
+            symbol,
+            start=start_date,
+            end=end_date,
+            progress=False,
+            headers=headers  # 👈 agregamos headers tipo navegador
+        )
         if df.empty:
             logger.warning(f"⚠️ No se obtuvieron datos para {symbol}.")
             return pd.DataFrame()
@@ -57,11 +64,9 @@ def fetch_stock_data(symbol: str, start_date: str, end_date: str) -> pd.DataFram
         df.reset_index(inplace=True)
         df["Symbol"] = symbol
         return df
-    
     except Exception as e:
         logger.error(f"❌ Error descargando {symbol}: {e}")
         return pd.DataFrame()
-
 
 def fetch_multiple_symbols(symbols: list[str], start_date: str, end_date: str) -> pd.DataFrame:
     """
