@@ -1,6 +1,8 @@
+from unittest.mock import patch
+
 import pandas as pd
 import pytest
-from unittest.mock import patch
+
 from app.services.data import fetch_stock_data_alpaca
 
 
@@ -9,8 +11,22 @@ def mock_response_ok():
     """Simula una respuesta JSON de Alpaca API."""
     return {
         "bars": [
-            {"t": "2024-10-01T00:00:00Z", "o": 100.0, "h": 105.0, "l": 99.0, "c": 104.0, "v": 5000},
-            {"t": "2024-10-02T00:00:00Z", "o": 104.0, "h": 106.0, "l": 103.0, "c": 105.0, "v": 6000},
+            {
+                "t": "2024-10-01T00:00:00Z",
+                "o": 100.0,
+                "h": 105.0,
+                "l": 99.0,
+                "c": 104.0,
+                "v": 5000,
+            },
+            {
+                "t": "2024-10-02T00:00:00Z",
+                "o": 104.0,
+                "h": 106.0,
+                "l": 103.0,
+                "c": 105.0,
+                "v": 6000,
+            },
         ]
     }
 

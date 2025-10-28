@@ -1,5 +1,6 @@
-import requests
 import pandas as pd
+import requests
+
 from app.utils.config import (
     ALPACA_API_KEY_ID,
     ALPACA_API_SECRET_KEY,
@@ -7,37 +8,22 @@ from app.utils.config import (
 )
 
 
-def fetch_stock_data_alpaca(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+def fetch_stock_data_alpaca(
+    symbol: str, start_date: str, end_date: str
+) -> pd.DataFrame:
     """
     Fetch daily OHLCV price data for a given symbol from Alpaca Market Data API v2.
-
-    Parameters
-    ----------
-    symbol : str
-        Stock ticker symbol (e.g. 'AAPL', 'MSFT').
-    start_date : str
-        Start date in ISO format 'YYYY-MM-DD'.
-    end_date : str
-        End date in ISO format 'YYYY-MM-DD'.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with columns ['timestamp', 'open', 'high', 'low', 'close', 'volume'].
-        Returns empty DataFrame if an error or empty response occurs.
     """
-
     url = f"{ALPACA_DATA_URL}/stocks/{symbol}/bars"
     headers = {
         "APCA-API-KEY-ID": ALPACA_API_KEY_ID,
         "APCA-API-SECRET-KEY": ALPACA_API_SECRET_KEY,
     }
-
     params = {
         "timeframe": "1Day",
         "start": f"{start_date}T00:00:00Z",
         "end": f"{end_date}T23:59:59Z",
-        "limit": 1000,  # máximo permitido
+        "limit": 1000,
     }
 
     try:
@@ -45,10 +31,10 @@ def fetch_stock_data_alpaca(symbol: str, start_date: str, end_date: str) -> pd.D
 
         # Manejo de errores HTTP
         if response.status_code == 401:
-            print(f"❌ Unauthorized (401): revisa tus claves Alpaca.")
+            print("❌ Unauthorized (401): revisa tus claves Alpaca.")
             return pd.DataFrame()
         elif response.status_code == 429:
-            print(f"⚠️ Too Many Requests (429): espera unos segundos y reintenta.")
+            print("⚠️ Too Many Requests (429): espera unos segundos y reintenta.")
             return pd.DataFrame()
         elif response.status_code >= 500:
             print(f"⚠️ Server error {response.status_code}: {response.text}")

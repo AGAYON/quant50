@@ -1,5 +1,6 @@
 # app/utils/config.py
 import os
+
 from dotenv import load_dotenv
 
 # Cargar variables de entorno
@@ -16,4 +17,3 @@ REPORTS_DIR = os.getenv("REPORTS_DIR", "./data/reports")
 
 # Nivel de logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-
