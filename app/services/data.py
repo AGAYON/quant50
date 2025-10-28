@@ -1,11 +1,17 @@
 import pandas as pd
 import requests
+import os
+import duckdb
+from typing import Optional
+from datetime import datetime
 
 from app.utils.config import (
     ALPACA_API_KEY_ID,
     ALPACA_API_SECRET_KEY,
     ALPACA_DATA_URL,
 )
+
+DUCKDB_PATH = os.path.join("data", "market.duckdb")
 
 
 def fetch_stock_data_alpaca(
@@ -68,3 +74,62 @@ def fetch_stock_data_alpaca(
     except requests.exceptions.RequestException as e:
         print(f"⚠️ Request error for {symbol}: {e}")
         return pd.DataFrame()
+
+
+
+def get_latest_timestamp(symbol: str) -> Optional[pd.Timestamp]:
+    """
+    Return the most recent timestamp we have stored for a given symbol
+    in the local DuckDB database.
+
+    Parameters
+    ----------
+    symbol : str
+        Ticker, e.g. "AAPL".
+
+    Returns
+    -------
+    pd.Timestamp or None
+        The latest timestamp we have for that symbol in bars_daily.
+        Returns None if the table doesn't exist or the symbol has no data.
+    """
+    # Si la DB no existe todavía, no hay datos.
+    if not os.path.exists(DUCKDB_PATH):
+        return None
+
+    con = duckdb.connect(DUCKDB_PATH)
+    try:
+        # Verificar si la tabla bars_daily existe
+        table_exists = con.execute(
+            """
+            SELECT count(*)
+            FROM information_schema.tables
+            WHERE table_name = 'bars_daily';
+            """
+        ).fetchone()[0]
+
+        if table_exists == 0:
+            # No hemos creado la tabla aún
+            return None
+
+        result = con.execute(
+            """
+            SELECT max(timestamp)
+            FROM bars_daily
+            WHERE symbol = ?
+            """,
+            [symbol],
+        ).fetchone()
+
+        # result será una tupla tipo (Timestamp or None,)
+        latest_ts = result[0]
+
+        if latest_ts is None:
+            return None
+
+        # Normalizamos a pandas.Timestamp (timezone-aware o naive, ok)
+        return pd.to_datetime(latest_ts)
+
+    finally:
+        con.close()
+
