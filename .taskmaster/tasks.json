@@ -12,7 +12,7 @@
                 "app/services/data.py",
                 "app/utils/config.py"
             ],
-            "status": "ready",
+            "status": "done",
             "priority": "high",
             "test": "tests/test_data.py",
             "owner": "dev_andres",
