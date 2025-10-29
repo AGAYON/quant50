@@ -230,3 +230,7 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+
+# Database files
+data/market.duckdb
+data/market.duckdb.wal

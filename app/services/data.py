@@ -3,15 +3,15 @@ import requests
 import os
 import duckdb
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.utils.config import (
     ALPACA_API_KEY_ID,
     ALPACA_API_SECRET_KEY,
     ALPACA_DATA_URL,
+    DUCKDB_PATH
 )
 
-DUCKDB_PATH = os.path.join("data", "market.duckdb")
 
 
 def fetch_stock_data_alpaca(
@@ -133,3 +133,54 @@ def get_latest_timestamp(symbol: str) -> Optional[pd.Timestamp]:
     finally:
         con.close()
 
+
+def upsert_ohlcv(df: pd.DataFrame, window_days: int = 180) -> None:
+    """
+    Inserta o actualiza datos OHLCV en DuckDB, manteniendo una ventana móvil.
+
+    Esta versión recrea la tabla 'bars_daily' en cada actualización.
+    Es eficiente para bases pequeñas y evita conflictos de clave.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame con columnas ['timestamp', 'symbol', 'open', 'high', 'low', 'close', 'volume'].
+    window_days : int, optional
+        Tamaño de la ventana móvil en días (default = 180).
+
+    Returns
+    -------
+    None
+    """
+    if df.empty:
+        print("⚠️ No hay datos nuevos para insertar.")
+        return
+
+    con = duckdb.connect(DUCKDB_PATH)
+
+    # 1️⃣ Crear tabla si no existe (estructura vacía)
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bars_daily AS
+        SELECT * FROM df LIMIT 0
+        """
+    )
+
+    # 2️⃣ Leer datos existentes y concatenar con nuevos
+    existing = con.execute("SELECT * FROM bars_daily").fetchdf()
+    combined = pd.concat([existing, df], ignore_index=True)
+
+    # 3️⃣ Eliminar duplicados por (timestamp, symbol)
+    combined = combined.drop_duplicates(subset=["timestamp", "symbol"], keep="last")
+
+    # 4️⃣ Aplicar ventana móvil (solo últimos N días)
+    latest_date = combined["timestamp"].max()
+    cutoff_date = latest_date - timedelta(days=window_days)
+    combined = combined[combined["timestamp"] >= cutoff_date]
+
+    # 5️⃣ Reemplazar la tabla por la versión actualizada
+    con.execute("DROP TABLE bars_daily")
+    con.execute("CREATE TABLE bars_daily AS SELECT * FROM combined")
+
+    con.close()
+    print(f"✅ Datos actualizados hasta {latest_date.date()} (ventana {window_days} días).")

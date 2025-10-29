@@ -17,3 +17,7 @@ REPORTS_DIR = os.getenv("REPORTS_DIR", "./data/reports")
 
 # Nivel de logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# Ruta a la base de datos DuckDB
+DUCKDB_PATH = os.path.join("data", "market.duckdb")
+
