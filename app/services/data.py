@@ -30,6 +30,7 @@ def fetch_stock_data_alpaca(
         "start": f"{start_date}T00:00:00Z",
         "end": f"{end_date}T23:59:59Z",
         "limit": 1000,
+        "feed": "iex",
     }
 
     try:
@@ -184,3 +185,51 @@ def upsert_ohlcv(df: pd.DataFrame, window_days: int = 180) -> None:
 
     con.close()
     print(f"✅ Datos actualizados hasta {latest_date.date()} (ventana {window_days} días).")
+
+
+
+def sync_symbol(symbol: str, window_days: int = 180) -> None:
+    """
+    Sincroniza los datos más recientes de un símbolo específico desde Alpaca.
+
+    Si no hay datos en la base local, descarga el histórico completo permitido.
+    Si ya existen, descarga solo los días faltantes.
+
+    Parameters
+    ----------
+    symbol : str
+        Ticker del activo (ej. 'AAPL').
+    window_days : int, optional
+        Ventana de días a mantener en la base (default = 180).
+
+    Returns
+    -------
+    None
+    """
+    from app.services.data import fetch_stock_data_alpaca, upsert_ohlcv, get_latest_timestamp
+
+    latest_ts = get_latest_timestamp(symbol)
+    today = datetime.utcnow().date()
+
+    if latest_ts is None:
+        # No hay datos previos → descargar histórico completo (por ejemplo, 180 días)
+        start_date = today - timedelta(days=window_days)
+        print(f"⬇️ {symbol}: descargando histórico inicial desde {start_date}...")
+    else:
+        # Solo descargar días faltantes
+        start_date = latest_ts.date() + timedelta(days=1)
+        print(f"🔄 {symbol}: actualizando desde {start_date} hasta {today}...")
+
+    # Evitar descargas redundantes
+    if start_date > today:
+        print(f"✅ {symbol}: ya está actualizado.")
+        return
+
+    df_new = fetch_stock_data_alpaca(symbol, str(start_date), str(today))
+
+    if df_new.empty:
+        print(f"⚠️ {symbol}: no se recibieron datos nuevos.")
+        return
+
+    upsert_ohlcv(df_new, window_days=window_days)
+    print(f"✅ {symbol}: sincronización completa hasta {df_new['timestamp'].max().date()}.")
