@@ -1,17 +1,17 @@
+import os
+from datetime import datetime, timedelta
+from typing import Optional
+
+import duckdb
 import pandas as pd
 import requests
-import os
-import duckdb
-from typing import Optional
-from datetime import datetime, timedelta
 
 from app.utils.config import (
     ALPACA_API_KEY_ID,
     ALPACA_API_SECRET_KEY,
     ALPACA_DATA_URL,
-    DUCKDB_PATH
+    DUCKDB_PATH,
 )
-
 
 
 def fetch_stock_data_alpaca(
@@ -75,7 +75,6 @@ def fetch_stock_data_alpaca(
     except requests.exceptions.RequestException as e:
         print(f"⚠️ Request error for {symbol}: {e}")
         return pd.DataFrame()
-
 
 
 def get_latest_timestamp(symbol: str) -> Optional[pd.Timestamp]:
@@ -145,7 +144,8 @@ def upsert_ohlcv(df: pd.DataFrame, window_days: int = 180) -> None:
     Parameters
     ----------
     df : pd.DataFrame
-        DataFrame con columnas ['timestamp', 'symbol', 'open', 'high', 'low', 'close', 'volume'].
+        DataFrame con columnas ['timestamp', 'symbol',
+        'open', 'high', 'low', 'close', 'volume'].
     window_days : int, optional
         Tamaño de la ventana móvil en días (default = 180).
 
@@ -184,8 +184,9 @@ def upsert_ohlcv(df: pd.DataFrame, window_days: int = 180) -> None:
     con.execute("CREATE TABLE bars_daily AS SELECT * FROM combined")
 
     con.close()
-    print(f"✅ Datos actualizados hasta {latest_date.date()} (ventana {window_days} días).")
-
+    print(
+        f"✅ Datos actualizados hasta {latest_date.date()} (ventana {window_days} días)."
+    )
 
 
 def sync_symbol(symbol: str, window_days: int = 180) -> None:
@@ -206,7 +207,11 @@ def sync_symbol(symbol: str, window_days: int = 180) -> None:
     -------
     None
     """
-    from app.services.data import fetch_stock_data_alpaca, upsert_ohlcv, get_latest_timestamp
+    from app.services.data import (
+        fetch_stock_data_alpaca,
+        get_latest_timestamp,
+        upsert_ohlcv,
+    )
 
     latest_ts = get_latest_timestamp(symbol)
     today = datetime.utcnow().date()
@@ -232,4 +237,6 @@ def sync_symbol(symbol: str, window_days: int = 180) -> None:
         return
 
     upsert_ohlcv(df_new, window_days=window_days)
-    print(f"✅ {symbol}: sincronización completa hasta {df_new['timestamp'].max().date()}.")
+    print(
+        f"✅ {symbol}: sincronización completa hasta {df_new['timestamp'].max().date()}."
+    )
