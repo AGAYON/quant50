@@ -1,0 +1,248 @@
+{
+    "version": "1.0",
+    "updated": "2025-10-29",
+    "owner": "Quant50 Backend Team",
+    "tasks": [
+        {
+            "id": "T001",
+            "title": "Ingesta de datos (Alpaca → DuckDB)",
+            "description": "Crear funciones en app/services/data.py para descargar precios diarios de Alpaca Market API, almacenarlos en DuckDB (data/market.duckdb) y mantener sincronización incremental.",
+            "depends_on": [],
+            "files": [
+                "app/services/data.py",
+                "app/utils/config.py"
+            ],
+            "status": "ready",
+            "priority": "high",
+            "test": "tests/test_data.py",
+            "owner": "dev_andres",
+            "tags": [
+                "data",
+                "alpaca",
+                "duckdb",
+                "ETL"
+            ]
+        },
+        {
+            "id": "T002",
+            "title": "Cálculo de features cuantitativos",
+            "description": "Generar features de momentum, volatilidad, RSI, liquidez, beta, media móvil, etc. en app/services/features.py a partir de los precios almacenados en DuckDB.",
+            "depends_on": [
+                "T001"
+            ],
+            "files": [
+                "app/services/features.py"
+            ],
+            "status": "blocked",
+            "priority": "high",
+            "test": "tests/test_features.py",
+            "tags": [
+                "features",
+                "quant",
+                "pandas"
+            ]
+        },
+        {
+            "id": "T003",
+            "title": "Construcción de labels (excess returns)",
+            "description": "Construir labels de rendimiento excedente sobre benchmark para cada activo y periodo.",
+            "depends_on": [
+                "T001"
+            ],
+            "files": [
+                "app/services/label.py"
+            ],
+            "status": "blocked",
+            "priority": "medium",
+            "test": "tests/test_label.py",
+            "tags": [
+                "labels",
+                "finance",
+                "returns"
+            ]
+        },
+        {
+            "id": "T004",
+            "title": "Entrenamiento ML semanal (LightGBM)",
+            "description": "Implementar modelo LightGBM cross-sectional. Guardar artifacts (model.pkl, scaler.pkl).",
+            "depends_on": [
+                "T002",
+                "T003"
+            ],
+            "files": [
+                "app/services/model.py",
+                "models/"
+            ],
+            "status": "blocked",
+            "priority": "high",
+            "test": "tests/test_model.py",
+            "tags": [
+                "machine-learning",
+                "lightgbm",
+                "training"
+            ]
+        },
+        {
+            "id": "T005",
+            "title": "Optimización de portafolio (cvxpy)",
+            "description": "Resolver asignación de pesos robusta con Ledoit-Wolf covariance shrinkage. 50 activos, límites sectoriales y turnover.",
+            "depends_on": [
+                "T004"
+            ],
+            "files": [
+                "app/services/optimize.py"
+            ],
+            "status": "blocked",
+            "priority": "high",
+            "test": "tests/test_optimize.py",
+            "tags": [
+                "optimization",
+                "cvxpy",
+                "portfolio"
+            ]
+        },
+        {
+            "id": "T006",
+            "title": "Ejecución de órdenes (Alpaca Paper Trading)",
+            "description": "Implementar envío de órdenes, validación de posiciones y logging en app/services/execute.py.",
+            "depends_on": [
+                "T005"
+            ],
+            "files": [
+                "app/services/execute.py"
+            ],
+            "status": "blocked",
+            "priority": "high",
+            "test": "tests/test_execute.py",
+            "tags": [
+                "execution",
+                "trading",
+                "alpaca"
+            ]
+        },
+        {
+            "id": "T007",
+            "title": "Reporte PDF diario",
+            "description": "Generar PDF diario con KPIs: PnL, drawdown, turnover, top holdings, órdenes ejecutadas.",
+            "depends_on": [
+                "T004",
+                "T005",
+                "T006"
+            ],
+            "files": [
+                "app/services/report.py",
+                "data/reports/"
+            ],
+            "status": "blocked",
+            "priority": "medium",
+            "test": "tests/test_report.py",
+            "tags": [
+                "report",
+                "pdf",
+                "analytics"
+            ]
+        },
+        {
+            "id": "T008",
+            "title": "Endpoints FastAPI (/run, /report, /orders)",
+            "description": "Implementar endpoints principales que orquesten las funciones de ejecución, generación de reportes y consulta de órdenes.",
+            "depends_on": [
+                "T001",
+                "T002",
+                "T003",
+                "T004",
+                "T005",
+                "T006",
+                "T007"
+            ],
+            "files": [
+                "app/main.py",
+                "app/routes.py"
+            ],
+            "status": "blocked",
+            "priority": "high",
+            "test": "tests/test_api.py",
+            "tags": [
+                "api",
+                "fastapi"
+            ]
+        },
+        {
+            "id": "T009",
+            "title": "Automatización con cron / GitHub Actions",
+            "description": "Programar daily_run.py (diario) y weekly_train.py (semanal) con GitHub Actions o cron local.",
+            "depends_on": [
+                "T004",
+                "T005",
+                "T006"
+            ],
+            "files": [
+                "jobs/daily_run.py",
+                "jobs/weekly_train.py",
+                ".github/workflows/"
+            ],
+            "status": "blocked",
+            "priority": "medium",
+            "test": "tests/test_jobs.py",
+            "tags": [
+                "automation",
+                "ci",
+                "github-actions"
+            ]
+        },
+        {
+            "id": "T010",
+            "title": "Pruebas integradas y validación CI/CD",
+            "description": "Implementar pruebas E2E que validen flujo completo desde ingesta → modelo → optimización → ejecución → reporte.",
+            "depends_on": [
+                "T001",
+                "T002",
+                "T003",
+                "T004",
+                "T005",
+                "T006",
+                "T007",
+                "T008",
+                "T009"
+            ],
+            "files": [
+                "tests/test_integration.py",
+                ".github/workflows/ci.yml"
+            ],
+            "status": "blocked",
+            "priority": "high",
+            "tags": [
+                "testing",
+                "integration",
+                "ci"
+            ]
+        },
+        {
+            "id": "T010",
+            "title": "Pruebas integradas y validación CI/CD",
+            "description": "Implementar pruebas E2E que validen flujo completo desde ingesta → modelo → optimización → ejecución → reporte.",
+            "depends_on": [
+                "T001",
+                "T002",
+                "T003",
+                "T004",
+                "T005",
+                "T006",
+                "T007",
+                "T008",
+                "T009"
+            ],
+            "files": [
+                "tests/test_integration.py",
+                ".github/workflows/ci.yml"
+            ],
+            "status": "blocked",
+            "priority": "high",
+            "tags": [
+                "testing",
+                "integration",
+                "ci"
+            ]
+        }
+    ]
+}

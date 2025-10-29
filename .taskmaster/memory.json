@@ -1,0 +1,78 @@
+{
+    "project": "Quant50",
+    "version": "1.0",
+    "last_updated": "2025-10-29",
+    "decisions": [
+        {
+            "id": "D001",
+            "title": "Arquitectura modular en FastAPI + servicios",
+            "date": "2025-10-29",
+            "context": "El sistema requiere separación clara de responsabilidades para facilitar CI/CD y testing. Se adopta una estructura app/services + utils + jobs + models.",
+            "decision": "Cada componente del pipeline (data, features, label, model, optimize, execute, report) será un módulo independiente bajo app/services/, invocado desde FastAPI o jobs.",
+            "rationale": "Facilita mantenimiento, testing y escalabilidad.",
+            "impact": "Define estructura de imports y dependencias entre módulos."
+        },
+        {
+            "id": "D002",
+            "title": "Uso de DuckDB para almacenamiento local",
+            "date": "2025-10-29",
+            "context": "Se necesita una base local ligera, rápida y compatible con pandas.",
+            "decision": "Usar data/market.duckdb para almacenar históricos de precios y features.",
+            "rationale": "Evita overhead de Postgres para prototipo, mantiene compatibilidad SQL y portabilidad.",
+            "impact": "Afecta app/services/data.py, app/services/features.py y cualquier job que lea datos."
+        },
+        {
+            "id": "D003",
+            "title": "Modelo de machine learning: LightGBM cross-sectional",
+            "date": "2025-10-29",
+            "context": "El sistema busca predecir exceso de retorno relativo al universo de acciones.",
+            "decision": "Se usará LightGBM en modo cross-sectional con validación purged k-fold.",
+            "rationale": "Excelente performance en datos tabulares financieros y entrenamiento rápido.",
+            "impact": "Afecta app/services/model.py y jobs/weekly_train.py."
+        },
+        {
+            "id": "D004",
+            "title": "Optimización robusta (Markowitz con Ledoit-Wolf)",
+            "date": "2025-10-29",
+            "context": "Se necesita estabilidad frente a ruido en covarianzas y control de exposición sectorial.",
+            "decision": "Usar optimización cuadrática con covarianza shrinkage (Ledoit-Wolf) y restricciones cardinales.",
+            "rationale": "Reduce overfitting y volatilidad de pesos.",
+            "impact": "Afecta app/services/optimize.py y tests/test_optimize.py."
+        },
+        {
+            "id": "D005",
+            "title": "Paper trading con Alpaca API",
+            "date": "2025-10-29",
+            "context": "El entorno de producción debe operar en modo simulado, sin riesgo financiero real.",
+            "decision": "Usar API de Paper Trading de Alpaca, autenticada vía .env y config.py.",
+            "rationale": "Permite validación completa de pipeline sin costos reales.",
+            "impact": "Afecta app/services/execute.py, app/utils/config.py y reportes diarios."
+        },
+        {
+            "id": "D006",
+            "title": "CI/CD con GitHub Actions",
+            "date": "2025-10-29",
+            "context": "El proyecto requiere validaciones automáticas antes de cada merge.",
+            "decision": "Integrar pipeline de lint + test + coverage + build en .github/workflows/ci.yml.",
+            "rationale": "Mantiene calidad de código y reproducibilidad continua.",
+            "impact": "Afecta el flujo de PRs, testing y release."
+        }
+    ],
+    "notes": [
+        {
+            "date": "2025-10-29",
+            "note": "El módulo data.py será el primero en implementarse (T001). Requiere API Alpaca funcional."
+        },
+        {
+            "date": "2025-10-29",
+            "note": "El reporte PDF diario debe incluir métricas de riesgo y órdenes ejecutadas, pero no mostrar credenciales."
+        }
+    ],
+    "guidelines": {
+        "code_quality": "Todo código nuevo debe pasar flake8, mypy y pytest antes del commit.",
+        "testing": "Coverage mínimo 85%. Los tests se ubican en tests/ y deben reflejar comportamiento real.",
+        "logging": "Usar logging estructurado desde app/utils/logging.py.",
+        "security": "Nunca exponer claves Alpaca o tokens en commits.",
+        "deployment": "Revisar workflows GitHub Actions antes de habilitar cronjobs reales."
+    }
+}
