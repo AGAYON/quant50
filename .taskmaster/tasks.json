@@ -73,7 +73,7 @@
                 "app/services/model.py",
                 "models/"
             ],
-            "status": "blocked",
+            "status": "done",
             "priority": "high",
             "test": "tests/test_model.py",
             "tags": [

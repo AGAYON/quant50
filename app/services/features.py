@@ -266,5 +266,11 @@ def generate_features(
 
     # Align and combine all feature series
     features = pd.concat([mom, vol, rsi, liq], axis=1).dropna()
+    # Ensure a consistent MultiIndex naming for downstream consumers
     features = features.sort_index()
+    try:
+        features.index = features.index.set_names(["timestamp", "symbol"])
+    except Exception:
+        # Fallback: if index is not a MultiIndex, leave as is
+        pass
     return features
