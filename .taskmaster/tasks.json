@@ -52,7 +52,7 @@
             "files": [
                 "app/services/label.py"
             ],
-            "status": "in_progress",
+            "status": "done",
             "priority": "medium",
             "test": "tests/test_label.py",
             "tags": [
