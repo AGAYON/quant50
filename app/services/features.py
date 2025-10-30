@@ -14,7 +14,6 @@ Notes
   performed outside these functions (e.g., in service callers).
 """
 
-
 import numpy as np
 import pandas as pd
 
