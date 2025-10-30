@@ -1,7 +1,4 @@
-import os
-from datetime import datetime, timedelta
 from importlib import reload
-
 import pandas as pd
 import pytest
 
@@ -12,8 +9,10 @@ def tmp_duckdb_path(tmp_path, monkeypatch):
     monkeypatch.setenv("DUCKDB_PATH", str(db_path))
     # Recargar config y módulo data para que tomen el nuevo DUCKDB_PATH
     import app.utils.config as config
+
     reload(config)
     from app.services import data as data_module  # type: ignore
+
     reload(data_module)
     return str(db_path)
 
@@ -99,5 +98,3 @@ def test_sync_symbol_downloads_only_missing_days(monkeypatch, tmp_duckdb_path):
     data_module.sync_symbol("MSFT", window_days=180)
     latest = data_module.get_latest_timestamp("MSFT")
     assert latest.normalize() == pd.to_datetime("2024-10-03").normalize()
-
-

@@ -4,8 +4,8 @@ pueden importarse correctamente sin errores de sintaxis o dependencias.
 """
 
 import importlib
-import pytest
 
+import pytest
 
 MODULES = [
     "app.main",

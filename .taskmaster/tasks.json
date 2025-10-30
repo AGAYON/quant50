@@ -33,7 +33,7 @@
             "files": [
                 "app/services/features.py"
             ],
-            "status": "blocked",
+            "status": "done",
             "priority": "high",
             "test": "tests/test_features.py",
             "tags": [
