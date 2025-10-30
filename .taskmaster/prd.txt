@@ -1,0 +1,152 @@
+─────────────────────────────────────────────────────
+PROJECT: Quant50 — Automated Quantitative Portfolio
+VERSION: 1.0
+OWNER: Backend Quantitative Architecture Team
+─────────────────────────────────────────────────────
+
+1️⃣ OBJECTIVE
+─────────────
+Build an automated backend that manages a 50-asset dynamic portfolio 
+composed of US equities and ETFs. The system fetches data daily, 
+calculates quantitative features, trains ML models weekly, optimizes 
+portfolio weights daily, executes paper trading orders via Alpaca API, 
+and generates a daily PDF report summarizing performance, trades, and risk.
+
+─────────────────────────────────────────────────────
+2️⃣ ARCHITECTURE OVERVIEW
+─────────────────────────────────────────────────────
+The project follows a modular FastAPI + job-based architecture.
+
+app/
+ ├── main.py              → FastAPI entrypoint
+ ├── routes.py            → API endpoints (/run, /report, /orders)
+ ├── services/            → Core logic modules
+ │   ├── data.py          → Data ingestion (Alpaca, DuckDB)
+ │   ├── features.py      → Feature engineering
+ │   ├── label.py         → Label construction (excess returns)
+ │   ├── model.py         → ML training (LightGBM)
+ │   ├── optimize.py      → Portfolio optimization (cvxpy)
+ │   ├── execute.py       → Alpaca paper trading
+ │   └── report.py        → Daily report generation (PDF)
+ ├── utils/               → Helpers (config, logging, dates)
+ ├── jobs/                → Cron & CI jobs
+ │   ├── daily_run.py
+ │   └── weekly_train.py
+ ├── models/              → Persisted models and scalers
+ ├── data/                → Local DuckDB + reports directory
+ └── tests/               → Unit and integration tests
+
+─────────────────────────────────────────────────────
+3️⃣ DATA SOURCES
+─────────────────────────────────────────────────────
+• Alpaca Market Data API (v2)
+• Alpaca Paper Trading API
+• Universe: ~300 S&P500 tickers + selected ETFs (SPY, QQQ, etc.)
+• Storage: DuckDB (data/market.duckdb)
+• Update frequency:
+    - Prices: daily
+    - Model training: weekly
+    - Report generation: daily
+
+─────────────────────────────────────────────────────
+4️⃣ ML PIPELINE
+─────────────────────────────────────────────────────
+• Features: momentum, volatility, RSI, liquidity, beta, returns
+• Labels: future excess returns over benchmark
+• Model: LightGBM (cross-sectional, purged K-Fold)
+• Evaluation metrics: ROC-AUC, Sharpe ratio improvement
+• Retraining schedule: every Monday (weekly_train.py)
+• Output: models/latest_model.pkl, models/scaler.pkl
+
+─────────────────────────────────────────────────────
+5️⃣ PORTFOLIO OPTIMIZATION
+─────────────────────────────────────────────────────
+• Method: Robust Markowitz (Ledoit-Wolf covariance shrinkage)
+• Constraints:
+    - 50 assets maximum
+    - Sector caps (max 25% per sector)
+    - Turnover ≤ 15% daily
+    - Volatility targeting at 10% annualized
+• Solver: cvxpy
+• Output: daily weights, exposure limits
+
+─────────────────────────────────────────────────────
+6️⃣ RISK & EXECUTION
+─────────────────────────────────────────────────────
+• Alpaca paper trading environment only
+• Daily rebalance via daily_run.py
+• Risk management:
+    - Max drawdown 10%
+    - Stop-loss at 3× rolling 5-day volatility
+• All orders logged before execution
+• No live trading in production environment
+
+─────────────────────────────────────────────────────
+7️⃣ REPORTING & OUTPUTS
+─────────────────────────────────────────────────────
+• Daily PDF report (data/reports/diario_YYYYMMDD.pdf)
+• KPIs:
+    - Daily PnL, cumulative PnL, YTD return
+    - Max drawdown, volatility, turnover
+    - Top holdings, sector weights
+    - Executed orders summary
+• Generated automatically at 22:00 UTC daily
+
+─────────────────────────────────────────────────────
+8️⃣ API DESIGN
+─────────────────────────────────────────────────────
+Base URL: /api/v1
+
+Endpoints:
+    - /run      → Trigger daily pipeline manually
+    - /report   → Generate and return latest report PDF
+    - /orders   → Show latest Alpaca paper orders
+
+Response schema:
+    - status: str
+    - timestamp: str
+    - summary: dict
+
+─────────────────────────────────────────────────────
+9️⃣ JOB AUTOMATION
+─────────────────────────────────────────────────────
+• GitHub Actions used for CI/CD and scheduled jobs.
+• Daily job (cron 22:00 UTC): runs daily_run.py
+• Weekly job (cron Monday 20:00 UTC): runs weekly_train.py
+• Local fallback: systemd or cron alternative
+
+─────────────────────────────────────────────────────
+🔟 DEV STANDARDS & CI POLICY
+─────────────────────────────────────────────────────
+• Code style enforced by .cursor-rules (black, isort, mypy, pytest)
+• Minimum coverage: 85%
+• Each new service must include test coverage
+• CI pipeline:
+    1. Install dependencies
+    2. Run linting & type checks
+    3. Run tests with coverage
+    4. Build FastAPI docs (OpenAPI)
+    5. Upload artifacts (PDF reports, logs)
+• Branch naming: feature/<module>, fix/<bug>, chore/<task>
+• Pull requests require review and CI green check before merge
+• Secrets (.env) excluded from repository
+• Report generation uses mocked credentials in CI
+
+─────────────────────────────────────────────────────
+🧠 GOVERNANCE & MEMORY
+─────────────────────────────────────────────────────
+• All key architectural decisions recorded in .taskmaster/memory.json
+• Task dependencies tracked in .taskmaster/tasks.json
+• Changes to module contracts require PR + documentation update
+
+─────────────────────────────────────────────────────
+✅ DELIVERABLES
+─────────────────────────────────────────────────────
+1. Fully functional backend API (FastAPI)
+2. Automated ML & optimization pipeline
+3. Paper trading execution (Alpaca)
+4. Daily PDF reports
+5. CI/CD pipeline with GitHub Actions
+6. 85%+ test coverage
+7. Clean modular code with lint compliance
+─────────────────────────────────────────────────────

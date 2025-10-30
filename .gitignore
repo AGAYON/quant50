@@ -205,3 +205,32 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# ==========================
+# Data and Local Storage
+# ==========================
+data/*.duckdb
+data/*.parquet
+data/*.csv
+data/*.db
+data/*.sqlite
+
+# Ignore reports and temporary outputs
+data/reports/
+*.pdf
+
+# Jupyter and notebooks checkpoints
+.ipynb_checkpoints/
+
+# OS and IDE files
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.vscode/
+.idea/
+
+# Database files
+data/market.duckdb
+data/market.duckdb.wal

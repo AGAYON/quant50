@@ -1,0 +1,110 @@
+{
+    "project": "quant50_portfolio",
+    "version": "1.0",
+    "description": "Automated quantitative backend for a 50-stock dynamic portfolio using Alpaca, LightGBM, cvxpy, and FastAPI. Modular, test-driven, CI-integrated codebase.",
+    "style": {
+        "language": "python",
+        "formatter": "black",
+        "import_sorter": "isort",
+        "docstrings": "google",
+        "max_line_length": 100,
+        "require_type_hints": true,
+        "indent": 4,
+        "quote_style": "double",
+        "spaces_around_operators": true,
+        "end_of_file_newline": true
+    },
+    "linting": {
+        "tools": [
+            "flake8",
+            "mypy",
+            "black",
+            "isort"
+        ],
+        "rules": [
+            "flake8: ignore E203,E501,W503",
+            "mypy: disallow_untyped_defs=True",
+            "mypy: disallow_incomplete_defs=True",
+            "mypy: check_untyped_defs=True"
+        ]
+    },
+    "testing": {
+        "framework": "pytest",
+        "min_coverage": 0.85,
+        "folder": "tests",
+        "require_test_for_new_modules": true,
+        "auto_generate_test_stub": true,
+        "naming_convention": "test_<module>_<function>"
+    },
+    "devops": {
+        "ci_tool": "github_actions",
+        "workflow_file": ".github/workflows/ci.yml",
+        "checklist": [
+            "Run linting (flake8, black, isort, mypy)",
+            "Run unit tests with pytest --cov=app",
+            "Build and validate FastAPI app with uvicorn",
+            "Validate PDF report generation and Alpaca connectivity (mocked)"
+        ]
+    },
+    "security": {
+        "env_file": ".env",
+        "rules": [
+            "Never commit .env or API keys.",
+            "Secrets must be referenced via environment variables.",
+            "Alpaca credentials only loaded inside app/utils/config.py.",
+            "Reports saved under ./data/reports (non-public)."
+        ]
+    },
+    "conventions": {
+        "logging": "app/utils/logging.py",
+        "config": "app/utils/config.py",
+        "database": "data/market.duckdb",
+        "tests_location": "tests/",
+        "jobs": "jobs/",
+        "models": "models/"
+    },
+    "workflow": {
+        "branch_naming": "feature/<module> or fix/<issue>",
+        "commit_prefixes": [
+            "feat",
+            "fix",
+            "refactor",
+            "chore",
+            "test",
+            "docs"
+        ],
+        "require_pull_request_review": true,
+        "require_ci_pass_before_merge": true
+    },
+    "context": [
+        "README.md",
+        "requirements.txt",
+        "pyproject.toml",
+        ".github/workflows/*",
+        "app/main.py",
+        "app/routes.py",
+        "app/services/*.py",
+        "app/utils/*.py",
+        "jobs/*.py",
+        "models/*",
+        "tests/*"
+    ],
+    "rules": [
+        "All functions and classes must include type hints and a Google-style docstring.",
+        "No function longer than 60 lines without justification.",
+        "Use pandas/numpy idiomatically; avoid raw loops over DataFrames.",
+        "Never hardcode API keys or credentials.",
+        "Every new service module (under app/services/) must include at least one test in tests/.",
+        "CI must pass before merging to main.",
+        "Critical functions (model training, optimization, order execution) require logging and exception handling.",
+        "Use dependency injection for configuration and database connections (no globals).",
+        "Maintain consistent logging via app/utils/logging.py.",
+        "Document new endpoints in FastAPI with summary, description, and response_model.",
+        "Follow modular architecture; do not cross-import between unrelated service modules.",
+        "Keep imports sorted (isort) and code formatted (black).",
+        "When adding external libraries, update requirements.txt and test import.",
+        "Do not modify FastAPI endpoint contracts (/run, /report, /orders) without PR discussion.",
+        "When training models, persist only necessary artifacts (model.pkl, scaler.pkl).",
+        "All scripts in jobs/ must be idempotent and log runtime to console + file."
+    ]
+}
