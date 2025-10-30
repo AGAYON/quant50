@@ -10,6 +10,7 @@ python-dotenv
 
 # ML
 lightgbm
+scikit-learn
 cvxpy
 
 # Reporting
