@@ -92,7 +92,7 @@
             "files": [
                 "app/services/optimize.py"
             ],
-            "status": "blocked",
+            "status": "done",
             "priority": "high",
             "test": "tests/test_optimize.py",
             "tags": [
