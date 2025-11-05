@@ -8,6 +8,8 @@ import pandas as pd
 import pytest
 
 from app.services.report import (
+    calculate_diversification_index,
+    calculate_order_metrics,
     calculate_pnl_metrics,
     calculate_risk_metrics,
     create_pdf_report,
@@ -116,6 +118,7 @@ def test_calculate_pnl_metrics(mock_equity_history: pd.DataFrame):
     assert "daily_pnl" in metrics
     assert "cumulative_pnl" in metrics
     assert "ytd_return" in metrics
+    assert "cagr" in metrics
     assert "current_equity" in metrics
     assert "starting_equity" in metrics
     assert metrics["current_equity"] > 0
@@ -134,6 +137,11 @@ def test_calculate_risk_metrics(mock_equity_history: pd.DataFrame):
     assert "max_drawdown" in metrics
     assert "volatility" in metrics
     assert "turnover" in metrics
+    assert "sharpe_ratio" in metrics
+    assert "sortino_ratio" in metrics
+    assert "var_95" in metrics
+    assert "cvar_95" in metrics
+    assert "rolling_volatility_30d" in metrics
     assert isinstance(metrics["max_drawdown"], float)
     assert isinstance(metrics["volatility"], float)
 
@@ -143,6 +151,10 @@ def test_calculate_risk_metrics_empty():
     metrics = calculate_risk_metrics(pd.DataFrame())
     assert metrics["max_drawdown"] == 0.0
     assert metrics["volatility"] == 0.0
+    assert metrics["sharpe_ratio"] == 0.0
+    assert metrics["sortino_ratio"] == 0.0
+    assert metrics["var_95"] == 0.0
+    assert metrics["cvar_95"] == 0.0
 
 
 def test_get_top_holdings(mock_positions_response: pd.DataFrame):
@@ -175,7 +187,7 @@ def test_get_top_holdings_empty():
 
 @patch("app.services.report.get_account")
 @patch("app.services.report.get_current_positions")
-@patch("app.services.report.get_account_history")
+@patch("app.services.report.get_account_history_with_fallback")
 @patch("app.services.report.get_recent_orders")
 def test_generate_daily_report_success(
     mock_get_orders: MagicMock,
@@ -189,7 +201,7 @@ def test_generate_daily_report_success(
     """Test successful daily report generation."""
     mock_get_account.return_value = mock_account_response
     mock_get_positions.return_value = mock_positions_response
-    mock_get_history.return_value = mock_equity_history
+    mock_get_history.return_value = (mock_equity_history, "api_success")
     mock_get_orders.return_value = pd.DataFrame()
 
     report = generate_daily_report()
@@ -201,6 +213,10 @@ def test_generate_daily_report_success(
     assert "top_holdings" in report
     assert "sector_weights" in report
     assert "recent_orders" in report
+    assert "diversification_index" in report
+    assert "order_metrics" in report
+    assert "data_source_status" in report
+    assert report["data_source_status"] == "api_success"
 
 
 def test_create_pdf_report(tmp_path, mock_account_response):
@@ -230,10 +246,11 @@ def test_create_pdf_report(tmp_path, mock_account_response):
             {"symbol": "AAPL", "side": "buy", "qty": "10", "status": "filled"}
         ],
         "orders_count": 1,
+        "data_source_status": "api_success",
     }
 
     output_path = tmp_path / "test_report.pdf"
-    result_path = create_pdf_report(report_data, str(output_path))
+    result_path = create_pdf_report(report_data, str(output_path), include_charts=False)
 
     assert result_path == str(output_path)
     assert output_path.exists()
@@ -257,8 +274,43 @@ def test_create_pdf_report_minimal(tmp_path):
         "positions_count": 0,
         "recent_orders": [],
         "orders_count": 0,
+        "data_source_status": "api_success",
     }
 
     output_path = tmp_path / "test_minimal.pdf"
-    _ = create_pdf_report(report_data, str(output_path))
+    _ = create_pdf_report(report_data, str(output_path), include_charts=False)
     assert output_path.exists()
+
+
+def test_calculate_diversification_index(mock_positions_response: pd.DataFrame):
+    """Test HHI diversification index calculation."""
+    hhi = calculate_diversification_index(mock_positions_response)
+    assert 0.0 <= hhi <= 1.0
+    assert isinstance(hhi, float)
+
+
+def test_calculate_diversification_index_empty():
+    """Test HHI with empty positions."""
+    hhi = calculate_diversification_index(pd.DataFrame())
+    assert hhi == 1.0  # Maximum concentration
+
+
+def test_calculate_order_metrics():
+    """Test order metrics calculation."""
+    orders = pd.DataFrame(
+        {
+            "status": ["filled", "filled", "rejected", "pending"],
+            "symbol": ["AAPL", "MSFT", "GOOGL", "AMZN"],
+        }
+    )
+    metrics = calculate_order_metrics(orders)
+    assert "fill_rate" in metrics
+    assert "avg_holding_period_days" in metrics
+    assert metrics["fill_rate"] == 0.5  # 2 out of 4 filled
+
+
+def test_calculate_order_metrics_empty():
+    """Test order metrics with empty orders."""
+    metrics = calculate_order_metrics(pd.DataFrame())
+    assert metrics["fill_rate"] == 0.0
+    assert metrics["avg_holding_period_days"] == 0.0

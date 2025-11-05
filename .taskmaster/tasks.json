@@ -133,13 +133,36 @@
                 "app/services/report.py",
                 "data/reports/"
             ],
-            "status": "in_progress",
+            "status": "done",
             "priority": "medium",
             "test": "tests/test_report.py",
             "tags": [
                 "report",
                 "pdf",
                 "analytics"
+            ]
+        },
+        {
+            "id": "T007B",
+            "title": "Upgrade Daily Report to Desk-Ready Version",
+            "description": "Enhance report.py to produce desk-ready daily report PDF with advanced metrics, visualizations, and professional presentation.",
+            "depends_on": [
+                "T007"
+            ],
+            "files": [
+                "app/services/report.py",
+                "app/services/report_charts.py",
+                "tests/test_report.py",
+                "tests/test_report_charts.py"
+            ],
+            "status": "in_progress",
+            "priority": "high",
+            "test": "tests/test_report_charts.py",
+            "tags": [
+                "report",
+                "visualization",
+                "metrics",
+                "desk-ready"
             ]
         },
         {

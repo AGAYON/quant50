@@ -12,9 +12,12 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
+import unicodedata
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 import requests
 from fpdf import FPDF
@@ -24,10 +27,23 @@ from app.utils.config import (
     ALPACA_API_KEY_ID,
     ALPACA_API_SECRET_KEY,
     ALPACA_BASE_URL,
+    DUCKDB_PATH,
     REPORTS_DIR,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_text(text: str) -> str:
+    """Remove or replace characters unsupported by Latin-1 (FPDF)."""
+    if not isinstance(text, str):
+        text = str(text)
+    # Normalize to ASCII-compatible form
+    text = unicodedata.normalize("NFKD", text)
+    # Replace unsupported chars (like ✓, €, etc.)
+    text = text.encode("latin-1", "replace").decode("latin-1")
+    # Optional: replace placeholder "?" with something neutral
+    return text.replace("?", "")
 
 
 def _get_headers() -> Dict[str, str]:
@@ -218,10 +234,24 @@ def calculate_pnl_metrics(
     else:
         ytd_return = 0.0
 
+    # Calculate CAGR (Compound Annual Growth Rate)
+    if len(equity) >= 2:
+        days_diff = (
+            equity_history["timestamp"].iloc[-1] - equity_history["timestamp"].iloc[0]
+        ).days
+        years = days_diff / 365.25 if days_diff > 0 else 1.0
+        if years > 0 and starting_equity > 0:
+            cagr = ((current_equity / starting_equity) ** (1.0 / years) - 1.0) * 100
+        else:
+            cagr = 0.0
+    else:
+        cagr = 0.0
+
     return {
         "daily_pnl": daily_pnl,
         "cumulative_pnl": cumulative_pnl,
         "ytd_return": ytd_return,
+        "cagr": cagr,
         "current_equity": current_equity,
         "starting_equity": starting_equity,
     }
@@ -229,14 +259,17 @@ def calculate_pnl_metrics(
 
 def calculate_risk_metrics(
     equity_history: pd.DataFrame,
+    risk_free_rate: float = 0.0,
 ) -> Dict[str, float]:
     """
-    Calculate risk metrics: drawdown, volatility, turnover.
+    Calculate risk metrics: drawdown, volatility, turnover, Sharpe, Sortino, VaR, CVaR.
 
     Parameters
     ----------
     equity_history : pd.DataFrame
         Must have 'timestamp' and 'equity' columns.
+    risk_free_rate : float, optional
+        Annual risk-free rate (default: 0.0).
 
     Returns
     -------
@@ -244,7 +277,12 @@ def calculate_risk_metrics(
         {
             'max_drawdown': float (as percentage),
             'volatility': float (annualized, as percentage),
-            'turnover': float (estimated from equity changes)
+            'turnover': float (estimated from equity changes),
+            'sharpe_ratio': float (annualized),
+            'sortino_ratio': float (annualized),
+            'var_95': float (Value-at-Risk 95%),
+            'cvar_95': float (Conditional VaR 95%),
+            'rolling_volatility_30d': float (30-day rolling, annualized %)
         }
     """
     if equity_history.empty or "equity" not in equity_history.columns:
@@ -252,6 +290,11 @@ def calculate_risk_metrics(
             "max_drawdown": 0.0,
             "volatility": 0.0,
             "turnover": 0.0,
+            "sharpe_ratio": 0.0,
+            "sortino_ratio": 0.0,
+            "var_95": 0.0,
+            "cvar_95": 0.0,
+            "rolling_volatility_30d": 0.0,
         }
 
     equity_history = equity_history.sort_values("timestamp")
@@ -262,6 +305,11 @@ def calculate_risk_metrics(
             "max_drawdown": 0.0,
             "volatility": 0.0,
             "turnover": 0.0,
+            "sharpe_ratio": 0.0,
+            "sortino_ratio": 0.0,
+            "var_95": 0.0,
+            "cvar_95": 0.0,
+            "rolling_volatility_30d": 0.0,
         }
 
     # Calculate drawdown
@@ -269,12 +317,51 @@ def calculate_risk_metrics(
     drawdown = (equity - running_max) / running_max * 100
     max_drawdown = drawdown.min()
 
-    # Calculate volatility (annualized)
+    # Calculate returns
     returns = equity.pct_change().dropna()
-    if len(returns) > 1:
-        volatility = returns.std() * (252**0.5) * 100  # Annualized
-    else:
-        volatility = 0.0
+    if len(returns) == 0:
+        return {
+            "max_drawdown": max_drawdown,
+            "volatility": 0.0,
+            "turnover": 0.0,
+            "sharpe_ratio": 0.0,
+            "sortino_ratio": 0.0,
+            "var_95": 0.0,
+            "cvar_95": 0.0,
+            "rolling_volatility_30d": 0.0,
+        }
+
+    # Annualized volatility
+    vol_annualized = returns.std() * (252**0.5) * 100
+
+    # Rolling 30-day volatility
+    rolling_vol = returns.rolling(window=min(30, len(returns))).std()
+    rolling_vol_30d = (
+        rolling_vol.iloc[-1] * (252**0.5) * 100 if len(rolling_vol) > 0 else 0.0
+    )
+
+    # Sharpe ratio (annualized)
+    mean_return = returns.mean() * 252  # Annualized mean return
+    sharpe = (
+        (mean_return - risk_free_rate) / (returns.std() * (252**0.5))
+        if returns.std() > 0
+        else 0.0
+    )
+
+    # Sortino ratio (annualized, downside deviation)
+    downside_returns = returns[returns < 0]
+    downside_std = (
+        downside_returns.std() * (252**0.5) if len(downside_returns) > 0 else 0.0
+    )
+    sortino = (mean_return - risk_free_rate) / downside_std if downside_std > 0 else 0.0
+
+    # Value-at-Risk (VaR 95%) and Conditional VaR (CVaR 95%)
+    var_95 = np.percentile(returns, 5) * 100  # 5th percentile (negative)
+    cvar_95 = (
+        returns[returns <= np.percentile(returns, 5)].mean() * 100
+        if len(returns[returns <= np.percentile(returns, 5)]) > 0
+        else 0.0
+    )
 
     # Estimate turnover (simplified: average daily equity change %)
     daily_changes = equity.pct_change().abs().dropna()
@@ -282,8 +369,82 @@ def calculate_risk_metrics(
 
     return {
         "max_drawdown": max_drawdown,
-        "volatility": volatility,
+        "volatility": vol_annualized,
         "turnover": turnover,
+        "sharpe_ratio": sharpe,
+        "sortino_ratio": sortino,
+        "var_95": var_95,
+        "cvar_95": cvar_95,
+        "rolling_volatility_30d": rolling_vol_30d,
+    }
+
+
+def calculate_diversification_index(
+    positions: pd.DataFrame,
+) -> float:
+    """
+    Calculate Herfindahl-Hirschman Index (HHI) for portfolio diversification.
+
+    HHI ranges from 0 (perfectly diversified) to 1 (concentrated).
+    Lower HHI = better diversification.
+
+    Parameters
+    ----------
+    positions : pd.DataFrame
+        Must have 'market_value' column.
+
+    Returns
+    -------
+    float
+        HHI value (0-1 range).
+    """
+    if positions.empty or "market_value" not in positions.columns:
+        return 1.0  # Maximum concentration if no positions
+
+    total_value = positions["market_value"].sum()
+    if total_value == 0:
+        return 1.0
+
+    weights = positions["market_value"] / total_value
+    hhi = (weights**2).sum()
+    return float(hhi)
+
+
+def calculate_order_metrics(
+    orders: pd.DataFrame,
+) -> Dict[str, float]:
+    """
+    Calculate order execution metrics: fill rate, average holding period.
+
+    Parameters
+    ----------
+    orders : pd.DataFrame
+        Must have 'status' and optionally 'filled_at' columns.
+
+    Returns
+    -------
+    dict
+        {
+            'fill_rate': float (0-1),
+            'avg_holding_period_days': float (if data available)
+        }
+    """
+    if orders.empty:
+        return {"fill_rate": 0.0, "avg_holding_period_days": 0.0}
+
+    # Fill rate: % of orders that are filled
+    if "status" in orders.columns:
+        filled_count = (orders["status"] == "filled").sum()
+        fill_rate = filled_count / len(orders) if len(orders) > 0 else 0.0
+    else:
+        fill_rate = 0.0
+
+    # Average holding period (requires entry/exit data, simplified for now)
+    avg_holding_period = 0.0  # Placeholder - would need position tracking
+
+    return {
+        "fill_rate": fill_rate,
+        "avg_holding_period_days": avg_holding_period,
     }
 
 
@@ -389,36 +550,57 @@ def generate_daily_report(
     account = get_account()
     positions = get_current_positions()
 
-    # Get historical equity
-    equity_history = get_account_history(
+    # Get historical equity (with fallback to cache)
+    equity_history, data_source_status = get_account_history_with_fallback(
         start_date=(datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d"),
         end_date=report_date,
+        use_cache=True,
     )
 
     # Calculate metrics
     pnl_metrics = calculate_pnl_metrics(equity_history)
     risk_metrics = calculate_risk_metrics(equity_history)
 
+    # Calculate advanced metrics
+    diversification_index = calculate_diversification_index(positions)
+
     # Get top holdings
     holdings_data = get_top_holdings(positions, n=10, symbol_to_sector=symbol_to_sector)
 
     # Get recent orders
     orders = get_recent_orders(limit=50)
+    order_metrics = calculate_order_metrics(orders)
 
     report = {
         "report_date": report_date,
         "account": {
-            "equity": account.get("equity", 0.0),
-            "cash": account.get("cash", 0.0),
-            "buying_power": account.get("buying_power", 0.0),
+            "equity": (
+                float(account.get("equity", 0.0))
+                if isinstance(account.get("equity"), str)
+                else account.get("equity", 0.0)
+            ),
+            "cash": (
+                float(account.get("cash", 0.0))
+                if isinstance(account.get("cash"), str)
+                else account.get("cash", 0.0)
+            ),
+            "buying_power": (
+                float(account.get("buying_power", 0.0))
+                if isinstance(account.get("buying_power"), str)
+                else account.get("buying_power", 0.0)
+            ),
         },
         "pnl_metrics": pnl_metrics,
         "risk_metrics": risk_metrics,
+        "diversification_index": diversification_index,
+        "order_metrics": order_metrics,
         "top_holdings": holdings_data["top_holdings"].to_dict("records"),
         "sector_weights": holdings_data["sector_weights"].to_dict("records"),
         "positions_count": len(positions),
         "recent_orders": orders.to_dict("records") if not orders.empty else [],
         "orders_count": len(orders),
+        "equity_history": equity_history,  # Include for chart generation
+        "data_source_status": data_source_status,  # Track API vs cache usage
     }
 
     logger.info(
@@ -433,32 +615,33 @@ class PDFReport(FPDF):
     def header(self):
         """Add header to each page."""
         self.set_font("Arial", "B", 16)
-        self.cell(0, 10, "Quant50 Daily Report", 0, 1, "C")
+        self.cell(0, 10, sanitize_text("Quant50 Daily Report"), 0, 1, "C")
         self.ln(5)
 
     def footer(self):
         """Add footer to each page."""
         self.set_y(-15)
         self.set_font("Arial", "I", 8)
-        self.cell(0, 10, f"Page {self.page_no()}", 0, 0, "C")
+        self.cell(0, 10, sanitize_text(f"Page {self.page_no()}"), 0, 0, "C")
 
     def section_title(self, title: str):
         """Add a section title."""
         self.set_font("Arial", "B", 12)
-        self.cell(0, 10, title, 0, 1)
+        self.cell(0, 10, sanitize_text(title), 0, 1)
         self.ln(2)
 
     def metric_row(self, label: str, value: str):
         """Add a metric row."""
         self.set_font("Arial", "", 10)
-        self.cell(90, 8, label, 0, 0)
+        self.cell(90, 8, sanitize_text(label), 0, 0)
         self.set_font("Arial", "B", 10)
-        self.cell(0, 8, value, 0, 1)
+        self.cell(0, 8, sanitize_text(value), 0, 1)
 
 
 def create_pdf_report(
     report_data: Dict[str, object],
     output_path: Optional[str] = None,
+    include_charts: bool = True,
 ) -> str:
     """
     Create PDF report from report data.
@@ -483,12 +666,32 @@ def create_pdf_report(
         os.makedirs(REPORTS_DIR, exist_ok=True)
         output_path = os.path.join(REPORTS_DIR, f"diario_{date_str}.pdf")
 
+    # Generate charts if requested
+    chart_paths = {}
+    chart_dir = None
+    if include_charts:
+        try:
+            from app.services.report_charts import generate_all_charts
+
+            chart_dir = os.path.join(REPORTS_DIR, "tmp_charts")
+            equity_history = report_data.get("equity_history", pd.DataFrame())
+            sector_weights_df = pd.DataFrame(report_data.get("sector_weights", []))
+            top_holdings_df = pd.DataFrame(report_data.get("top_holdings", []))
+            chart_paths = generate_all_charts(
+                equity_history, sector_weights_df, top_holdings_df, chart_dir
+            )
+        except Exception as e:
+            logger.warning(f"Failed to generate charts: {e}")
+            include_charts = False
+
     pdf = PDFReport()
     pdf.add_page()
 
     # Title
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, f"Daily Report - {report_data['report_date']}", 0, 1, "C")
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "Quant50 Daily Report", 0, 1, "C")
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(0, 8, sanitize_text(f"Date: {report_data['report_date']}"), 0, 1, "C")
     pdf.ln(5)
 
     # Account Summary
@@ -509,13 +712,68 @@ def create_pdf_report(
     pdf.metric_row("Starting Equity", f"${pnl.get('starting_equity', 0):,.2f}")
     pdf.ln(5)
 
-    # Risk Metrics
+    # Risk Metrics with color coding
     pdf.section_title("Risk Metrics")
     risk = report_data.get("risk_metrics", {})
-    pdf.metric_row("Max Drawdown", f"{risk.get('max_drawdown', 0):.2f}%")
-    pdf.metric_row("Volatility (Annualized)", f"{risk.get('volatility', 0):.2f}%")
+
+    # Max Drawdown (red if < -10%)
+    max_dd = risk.get("max_drawdown", 0)
+    if max_dd < -10.0:
+        pdf.set_text_color(255, 0, 0)  # Red color
+    pdf.metric_row("Max Drawdown", f"{max_dd:.2f}%")
+    pdf.set_text_color(0, 0, 0)  # Reset to black
+
+    # Volatility (orange if > 25%)
+    vol = risk.get("volatility", 0)
+    if vol > 25.0:
+        pdf.set_text_color(255, 165, 0)  # Orange color
+    pdf.metric_row("Volatility (Annualized)", f"{vol:.2f}%")
+    pdf.set_text_color(0, 0, 0)  # Reset to black
+    pdf.metric_row(
+        "Rolling Volatility (30D)", f"{risk.get('rolling_volatility_30d', 0):.2f}%"
+    )
     pdf.metric_row("Turnover", f"{risk.get('turnover', 0):.2f}%")
+    pdf.metric_row("Sharpe Ratio", f"{risk.get('sharpe_ratio', 0):.2f}")
+    pdf.metric_row("Sortino Ratio", f"{risk.get('sortino_ratio', 0):.2f}")
+    pdf.metric_row("VaR (95%)", f"{risk.get('var_95', 0):.2f}%")
+    pdf.metric_row("CVaR (95%)", f"{risk.get('cvar_95', 0):.2f}%")
     pdf.ln(5)
+
+    # Advanced Metrics
+    pdf.section_title("Advanced Metrics")
+    pdf.metric_row(
+        "Diversification Index (HHI)",
+        f"{report_data.get('diversification_index', 1.0):.4f}",
+    )
+    order_metrics = report_data.get("order_metrics", {})
+    pdf.metric_row("Order Fill Rate", f"{order_metrics.get('fill_rate', 0) * 100:.2f}%")
+    pdf.ln(5)
+
+    # Embed charts if available
+    if include_charts and chart_paths:
+        # Equity Curve
+        if "equity_curve" in chart_paths:
+            pdf.section_title("Equity Curve")
+            pdf.image(chart_paths["equity_curve"], x=10, y=pdf.get_y(), w=190, h=100)
+            pdf.ln(110)
+
+        # Drawdown Curve
+        if "drawdown" in chart_paths:
+            pdf.section_title("Drawdown Curve")
+            pdf.image(chart_paths["drawdown"], x=10, y=pdf.get_y(), w=190, h=100)
+            pdf.ln(110)
+
+        # Sector Weights
+        if "sector_weights" in chart_paths:
+            pdf.section_title("Sector Weight Distribution")
+            pdf.image(chart_paths["sector_weights"], x=10, y=pdf.get_y(), w=190, h=100)
+            pdf.ln(110)
+
+        # Top Holdings
+        if "top_holdings" in chart_paths:
+            pdf.section_title("Top Holdings")
+            pdf.image(chart_paths["top_holdings"], x=10, y=pdf.get_y(), w=190, h=100)
+            pdf.ln(110)
 
     # Top Holdings
     pdf.section_title("Top Holdings")
@@ -568,6 +826,115 @@ def create_pdf_report(
     else:
         pdf.cell(0, 8, "No recent orders", 0, 1)
 
+    # Notes Section
+    pdf.add_page()
+    pdf.section_title("Notes")
+    pdf.set_font("Arial", "", 10)
+
+    # Data source status
+    data_source_status = report_data.get("data_source_status", "unknown")
+    if data_source_status == "api_success":
+        pdf.cell(0, 8, "Successfully connected to Alpaca API for account history", 0, 1)
+    elif data_source_status == "cache_used":
+        pdf.set_text_color(255, 165, 0)  # Orange color
+        pdf.cell(
+            0,
+            8,
+            "Alpaca API connection failed; used DuckDB cache for account history",
+            0,
+            1,
+        )
+        pdf.set_text_color(0, 0, 0)  # Reset to black
+    elif data_source_status == "api_failed":
+        pdf.set_text_color(255, 0, 0)  # Red color
+        pdf.cell(0, 8, "Alpaca API connection failed; no cache available", 0, 1)
+        pdf.set_text_color(0, 0, 0)  # Reset to black
+
+    pdf.ln(3)
+    pdf.set_font("Arial", "I", 9)
+    pdf.cell(
+        0,
+        8,
+        f"Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}",
+        0,
+        1,
+    )
+    pdf.cell(0, 8, "Quant50 Portfolio Management System", 0, 1)
+
     pdf.output(output_path)
     logger.info(f"PDF report saved to {output_path}")
+
+    # Clean up temporary chart files
+    if chart_dir and os.path.exists(chart_dir):
+        try:
+            shutil.rmtree(chart_dir)
+            logger.info(f"Cleaned up temporary charts directory: {chart_dir}")
+        except Exception as e:
+            logger.warning(f"Failed to clean up chart directory: {e}")
+
     return output_path
+
+
+def get_account_history_with_fallback(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    use_cache: bool = True,
+) -> Tuple[pd.DataFrame, str]:
+    """
+    Get account history with DuckDB fallback cache.
+
+    Parameters
+    ----------
+    start_date : str, optional
+        Start date in YYYY-MM-DD format.
+    end_date : str, optional
+        End date in YYYY-MM-DD format.
+    use_cache : bool, optional
+        If True, try DuckDB cache if API fails (default: True).
+
+    Returns
+    -------
+    tuple[pd.DataFrame, str]
+        Equity history DataFrame and status message:
+        - "api_success": Successfully retrieved from Alpaca API
+        - "cache_used": Fallback to DuckDB cache used
+        - "api_failed": API failed and no cache available
+    """
+    try:
+        # Try API first
+        result = get_account_history(start_date=start_date, end_date=end_date)
+        return result, "api_success"
+    except Exception as e:
+        logger.warning(f"Failed to get account history from API: {e}")
+        if use_cache:
+            # Fallback to DuckDB cache if available
+            try:
+                import duckdb
+
+                con = duckdb.connect(DUCKDB_PATH, read_only=True)
+                query = """
+                    SELECT DISTINCT timestamp, equity, cash, buying_power
+                    FROM account_history
+                    WHERE timestamp >= ? AND timestamp <= ?
+                    ORDER BY timestamp
+                """
+                result = con.execute(
+                    query,
+                    [
+                        start_date
+                        or (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d"),
+                        end_date or datetime.now().strftime("%Y-%m-%d"),
+                    ],
+                ).fetchdf()
+                con.close()
+                if not result.empty:
+                    logger.info("Retrieved account history from DuckDB cache")
+                    return result, "cache_used"
+            except Exception as cache_error:
+                logger.error(f"Cache fallback also failed: {cache_error}")
+
+        # Return empty DataFrame if all fails
+        return (
+            pd.DataFrame(columns=["timestamp", "equity", "cash", "buying_power"]),
+            "api_failed",
+        )
