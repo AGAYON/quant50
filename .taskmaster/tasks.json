@@ -133,7 +133,7 @@
                 "app/services/report.py",
                 "data/reports/"
             ],
-            "status": "blocked",
+            "status": "in_progress",
             "priority": "medium",
             "test": "tests/test_report.py",
             "tags": [
