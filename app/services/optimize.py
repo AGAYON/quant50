@@ -26,6 +26,10 @@ class OptimizeConfig:
     turnover_limit: float = 0.15  # L1 distance/2 between w and w_prev
     sector_cap: float = 0.50
     target_vol: Optional[float] = None  # if provided, add volatility targeting
+    min_expected_return: Optional[float] = (
+        None  # Optional filter: only select assets
+        #       with expected_return >= this threshold
+    )
 
 
 def compute_ledoit_wolf_cov(returns: pd.DataFrame) -> np.ndarray:
@@ -63,6 +67,45 @@ def _build_sector_matrix(
     return mat, uniq
 
 
+def _select_top_assets(
+    expected_returns: pd.Series,
+    max_assets: int,
+    min_expected_return: Optional[float] = None,
+) -> pd.Series:
+    """
+    Select top-N assets by expected return ranking (T005A).
+
+    Parameters
+    ----------
+    expected_returns : pd.Series
+        Expected returns indexed by symbol.
+    max_assets : int
+        Maximum number of assets to select (N ≤ max_assets).
+    min_expected_return : float, optional
+        Optional threshold: only select assets with expected_return >= this.
+
+    Returns
+    -------
+    pd.Series
+        Selected expected returns (subset of input, sorted descending).
+    """
+    # Apply threshold filter if provided
+    if min_expected_return is not None:
+        eligible = expected_returns[expected_returns >= min_expected_return]
+    else:
+        eligible = expected_returns.copy()
+
+    if len(eligible) == 0:
+        # If filter too strict, take at least the top asset
+        eligible = expected_returns.nlargest(1)
+
+    # Select top-N by expected return (descending)
+    n_select = min(len(eligible), max_assets)
+    selected = eligible.nlargest(n_select)
+
+    return selected
+
+
 def optimize_weights(
     expected_returns: pd.Series,
     cov_matrix: np.ndarray,
@@ -71,9 +114,10 @@ def optimize_weights(
     config: Optional[OptimizeConfig] = None,
 ) -> Dict[str, object]:
     """
-    Robust quadratic portfolio optimizer (Quant50 – T005).
+    Robust quadratic portfolio optimizer (Quant50 – T005/T005A).
 
     Implements a realistic Markowitz optimization with:
+    - Dynamic asset selection: top-N by expected return (T005A)
     - hard constraints: budget, lower/upper bounds
     - soft penalties: sector caps, turnover control
     - stable solver (OSQP) without ECOS dependency
@@ -96,15 +140,35 @@ def optimize_weights(
     -------
     dict
         {
-            "weights": pd.DataFrame(symbol, weight),
-            "meta": dict (risk_aversion, bounds, penalties, solver)
+            "weights": pd.DataFrame(symbol, weight) with sum == 1.0,
+            "meta": dict (risk_aversion, bounds, penalties, solver, n_selected)
         }
     """
     cfg = config or OptimizeConfig()
-    symbols = list(expected_returns.index)
-    n = len(symbols)
-    mu = expected_returns.values.astype(float)
-    Sigma = cov_matrix.astype(float)
+
+    # --- T005A: Dynamic selection by ranking ---
+    selected_returns = _select_top_assets(
+        expected_returns,
+        max_assets=cfg.max_assets,
+        min_expected_return=cfg.min_expected_return,
+    )
+    selected_symbols = list(selected_returns.index)
+    n_selected = len(selected_symbols)
+
+    # Reindex covariance matrix to selected symbols
+    original_symbols = list(expected_returns.index)
+    if set(selected_symbols) != set(original_symbols):
+        # Build mapping: original index -> selected index
+        orig_idx_map = {sym: i for i, sym in enumerate(original_symbols)}
+        selected_idx = [orig_idx_map[sym] for sym in selected_symbols]
+        cov_selected = cov_matrix[np.ix_(selected_idx, selected_idx)]
+    else:
+        cov_selected = cov_matrix
+
+    symbols = selected_symbols
+    n = n_selected
+    mu = selected_returns.values.astype(float)
+    Sigma = cov_selected.astype(float)
     w_prev = (
         prev_weights.reindex(symbols).fillna(0.0).values.astype(float)
         if prev_weights is not None
@@ -244,12 +308,21 @@ def optimize_weights(
         weights = x
 
     # --- output ---
+    # Ensure weights sum to 1.0 (normalize if needed due to numerical precision)
+    weights_sum = weights.sum()
+    if abs(weights_sum - 1.0) > 1e-6:
+        weights = weights / weights_sum
+
     out = pd.DataFrame({"symbol": symbols, "weight": weights}).sort_values(
         "weight", ascending=False
     )
+    # Filter out zero weights for cleaner output
+    out = out[out["weight"] > 1e-8].copy()
+
     meta = {
         "risk_aversion": cfg.risk_aversion,
         "max_assets": cfg.max_assets,
+        "n_selected": n_selected,
         "bounds": [cfg.lower_bound, cfg.upper_bound],
         "turnover_limit": cfg.turnover_limit,
         "sector_cap": cfg.sector_cap,
