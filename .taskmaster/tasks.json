@@ -111,7 +111,7 @@
             "files": [
                 "app/services/execute.py"
             ],
-            "status": "blocked",
+            "status": "done",
             "priority": "high",
             "test": "tests/test_execute.py",
             "tags": [
@@ -243,6 +243,127 @@
                 "integration",
                 "ci"
             ]
+        },
+        {
+            "id": "T005A",
+            "title": "Audit & Enforce Dynamic Selection (T005 ↔ T006)",
+            "description": "Auditar y reforzar la selección dinámica de activos (máx 50, top-N basado en predicción), confirmar compatibilidad con ejecución (T006), y reabrir tareas si es necesario.",
+            "depends_on": [
+                "T005",
+                "T006"
+            ],
+            "files": [
+                "app/services/optimize.py",
+                "app/services/model.py",
+                "app/services/execute.py",
+                "tests/test_optimize.py",
+                "tests/test_execute.py",
+                ".taskmaster/tasks.json"
+            ],
+            "status": "done",
+            "priority": "high",
+            "owner": "taskmaster",
+            "tags": [
+                "audit",
+                "selection",
+                "optimization",
+                "execution",
+                "contracts"
+            ],
+            "instructions": {
+                "context": [
+                    "El modelo (T004) produce predicciones cross-sectional por ticker (ej. y_pred_excess).",
+                    "La optimización (T005) debe seleccionar dinámicamente los mejores activos y asignar pesos bajo restricciones (sum=1, bounds, turnover, sector cap).",
+                    "La ejecución (T006) consume un DataFrame objetivo con columnas ['symbol','weight'] y rebalancea las posiciones en Alpaca.",
+                    "La intención de negocio: si no hay suficientes activos atractivos, el portafolio puede tener <50 posiciones; nunca forzar 50 si degrada el rendimiento esperado. Máximo absoluto 50."
+                ],
+                "goals": [
+                    "Asegurar que el portafolio **selecciona dinámicamente** los mejores activos por ranking de predicción (top-N con N≤50).",
+                    "Permitir N<50 cuando las señales sean débiles (no llenar por obligación).",
+                    "Reemplazar automáticamente los tickers cuando su ranking caiga por debajo del umbral y haya candidatos mejores.",
+                    "Garantizar que el output final de T005 **suma 1.0** (capital totalmente asignado entre los seleccionados), respetando restricciones (bounds/turnover/sector).",
+                    "Confirmar que T006 consume correctamente ese output y calcula deltas BUY/SELL correctos, con redondeo a **2 decimales** en cantidades.",
+                    "Si hay incompatibilidades entre T005 y T006, reabrir la(s) tarea(s) y proponer/realizar correcciones acotadas."
+                ],
+                "ranking_policy": {
+                    "source": "Predicción T004 (ej. 'y_pred_excess' o métrica de retorno esperado).",
+                    "selection": "Ordenar descendentemente por predicción; tomar top-N con N ≤ 50.",
+                    "min_eligibility": "Permitir filtro opcional por umbral (ej. y_pred_excess > 0). Si tras el filtro quedan 0, seleccionar el mejor subconjunto posible (>=1).",
+                    "normalization": "Re-normalizar pesos al 100% entre los seleccionados antes de optimizar.",
+                    "replacement": "Si un ticker sale del top-N, su peso objetivo debe caer a 0; si uno nuevo entra, se le asigna peso sujeto a restricciones."
+                },
+                "schema_contracts": {
+                    "model_predictions": {
+                        "required_columns": [
+                            "timestamp",
+                            "symbol",
+                            "y_pred_excess"
+                        ],
+                        "notes": "Cross-sectional por fecha; una fila por (fecha, símbolo)."
+                    },
+                    "optimize_input": {
+                        "required_columns": [
+                            "symbol",
+                            "expected_return"
+                        ],
+                        "mapping": "expected_return := y_pred_excess (u otra métrica univariada equivalente)."
+                    },
+                    "optimize_output": {
+                        "required_columns": [
+                            "symbol",
+                            "weight"
+                        ],
+                        "constraints": [
+                            "sum(weight) == 1.0 (±1e-6)",
+                            "0 ≤ weight ≤ upper_bound",
+                            "cardinalidad ≤ 50",
+                            "turnover ≤ config.turnover_limit (si hay prev_weights)",
+                            "sector_caps respetados si se provee mapping"
+                        ]
+                    },
+                    "execute_input": {
+                        "required_columns": [
+                            "symbol",
+                            "weight"
+                        ],
+                        "notes": "Lo consume compute_order_deltas(); las cantidades deberán redondearse a 2 decimales antes de enviar órdenes."
+                    }
+                },
+                "acceptance_criteria": [
+                    "🔹 T005 produce un DataFrame final con ≤50 símbolos y 'weight' normalizado a 1.0.",
+                    "🔹 Si el filtro por predicción reduce a <50, no se rellena artificialmente; se reasigna capital entre los seleccionados.",
+                    "🔹 Al menos una prueba de humo confirma reemplazo: si se degrada el ranking de un símbolo previamente activo y aparece otro con mayor predicción, el nuevo portafolio objetivo **incluye** al nuevo y **excluye** al anterior.",
+                    "🔹 T006: compute_order_deltas genera 'SELL' cuando el peso objetivo < peso actual; 'BUY' cuando >; y no produce órdenes espurias cuando ya está alineado (dentro de tolerancia de redondeo).",
+                    "🔹 T006: cantidades (qty) para órdenes **redondeadas a 2 decimales**; no acepta qty negativas (long-only).",
+                    "🔹 tests/test_optimize.py y tests/test_execute.py quedan verdes sin relajar aserciones de negocio."
+                ],
+                "verification_steps": [
+                    "1) Revisar 'app/services/optimize.py' y confirmar que existe (o agregar) una fase explícita de selección: ordenar por expected_return y cortar a N≤50.",
+                    "2) Verificar que la optimización se ejecute sobre el subconjunto seleccionado y que el resultado se normalice a 1.0.",
+                    "3) Confirmar compatibilidad columnar con T006: output final de T005 son ['symbol','weight'] (float).",
+                    "4) Validar que 'app/services/execute.py' (compute_order_deltas) usa 'current_price' y 'account_value' y produce 'BUY'/'SELL' correctos, con redondeo a 2 decimales en 'delta_qty'.",
+                    "5) Correr pruebas locales focalizadas: 'pytest -q -v tests/test_optimize.py tests/test_execute.py'.",
+                    "6) Si se requiere ajuste, reabrir T005 y/o T006 en .taskmaster/tasks.json (status='in_progress'), aplicar cambios mínimos necesarios y documentar en commit.",
+                    "7) Dejar un resumen en data/reports/selection_audit_YYYYMMDD.json con: N seleccionados, top-5 símbolos por expected_return, sum(weights), flags de constraint compliance."
+                ],
+                "guardrails": [
+                    "No introducir dependencias nuevas sin actualizar requirements.",
+                    "No degradar constraints (bounds, sector caps, turnover) para pasar tests.",
+                    "No cambiar contratos de T004; sólo consumir sus predicciones.",
+                    "No marcar T006 como 'done' sin pasar tests y sin validar deltas BUY/SELL correctos."
+                ],
+                "allowed_task_state_changes": [
+                    "Si se detectan inconsistencias, marcar T005 o T006 como 'in_progress' y dejar comentario en commit.",
+                    "Una vez verificado, devolver T005 y T006 a 'done' y dejar evidencia en selection_audit_YYYYMMDD.json."
+                ],
+                "commands": [
+                    "pytest -q -v tests/test_optimize.py",
+                    "pytest -q -v tests/test_execute.py"
+                ],
+                "artifacts": [
+                    "data/reports/selection_audit_YYYYMMDD.json"
+                ]
+            }
         }
     ]
 }
