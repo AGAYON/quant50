@@ -155,7 +155,7 @@
                 "tests/test_report.py",
                 "tests/test_report_charts.py"
             ],
-            "status": "in_progress",
+            "status": "done",
             "priority": "high",
             "test": "tests/test_report_charts.py",
             "tags": [
