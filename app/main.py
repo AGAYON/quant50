@@ -1,8 +1,11 @@
 from fastapi import FastAPI
 
+from app.routes import router
 from app.utils import config
 
 app = FastAPI(title="Quant50 Portfolio API", version="0.1")
+
+app.include_router(router)
 
 
 @app.get("/")

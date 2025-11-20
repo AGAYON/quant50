@@ -23,5 +23,3 @@ black
 flake8
 isort
 
-# Data fetching
-yfinance==0.2.37

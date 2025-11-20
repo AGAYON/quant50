@@ -240,3 +240,32 @@ def sync_symbol(symbol: str, window_days: int = 180) -> None:
     print(
         f"✅ {symbol}: sincronización completa hasta {df_new['timestamp'].max().date()}."
     )
+
+
+def get_all_bars() -> pd.DataFrame:
+    """
+    Retrieve all daily bars from DuckDB.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: timestamp, symbol, open, high, low, close, volume
+    """
+    if not os.path.exists(DUCKDB_PATH):
+        return pd.DataFrame()
+
+    con = duckdb.connect(DUCKDB_PATH)
+    try:
+        # Check if table exists
+        table_exists = con.execute(
+            "SELECT count(*) FROM information_schema.tables "
+            "WHERE table_name = 'bars_daily'"
+        ).fetchone()[0]
+
+        if table_exists == 0:
+            return pd.DataFrame()
+
+        df = con.execute("SELECT * FROM bars_daily").fetchdf()
+        return df
+    finally:
+        con.close()
