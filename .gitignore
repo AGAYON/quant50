@@ -234,3 +234,5 @@ __pycache__/
 # Database files
 data/market.duckdb
 data/market.duckdb.wal
+
+# test change for git

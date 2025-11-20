@@ -182,7 +182,7 @@
                 "app/main.py",
                 "app/routes.py"
             ],
-            "status": "blocked",
+            "status": "done",
             "priority": "high",
             "test": "tests/test_api.py",
             "tags": [

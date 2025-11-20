@@ -126,6 +126,64 @@ def get_current_positions() -> pd.DataFrame:
         raise
 
 
+def get_recent_orders(limit: int = 50) -> pd.DataFrame:
+    """
+    Get recent orders from Alpaca.
+
+    Parameters
+    ----------
+    limit : int, optional
+        Maximum number of orders to retrieve (default: 50).
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: symbol, qty, side, status, filled_at, filled_avg_price
+    """
+    url = f"{ALPACA_BASE_URL}/v2/orders"
+    headers = _get_headers()
+    params = {
+        "status": "all",
+        "limit": limit,
+        "direction": "desc",
+    }
+
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        if response.status_code != 200:
+            logger.warning(f"Failed to get orders: {response.status_code}")
+            return pd.DataFrame()
+
+        orders = response.json()
+        if not orders:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(orders)
+        # Select and rename relevant columns
+        cols_map = {
+            "symbol": "symbol",
+            "qty": "qty",
+            "side": "side",
+            "status": "status",
+            "filled_at": "filled_at",
+            "filled_avg_price": "filled_avg_price",
+        }
+        available_cols = [c for c in cols_map.keys() if c in df.columns]
+        df = df[available_cols].copy()
+        df = df.rename(
+            columns={c: cols_map[c] for c in available_cols if c in cols_map}
+        )
+
+        if "filled_at" in df.columns:
+            df["filled_at"] = pd.to_datetime(df["filled_at"], errors="coerce")
+
+        return df
+
+    except Exception as e:
+        logger.error(f"Error fetching orders: {e}")
+        return pd.DataFrame()
+
+
 def compute_order_deltas(
     target_weights: pd.DataFrame,
     current_positions: pd.DataFrame,
