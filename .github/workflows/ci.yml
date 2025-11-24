@@ -31,6 +31,16 @@ jobs:
           isort --check-only .
           flake8 .
 
-      - name: 🧪 Run tests
+      - name: 🔍 Validate TaskMaster JSONs
         run: |
-          pytest -v --maxfail=1 --disable-warnings
+          echo "Validating .taskmaster JSON structure..."
+          python -m json.tool .taskmaster/tasks.json
+          python -m json.tool .taskmaster/memory.json
+
+      - name: 🧪 Run Unit Tests
+        run: |
+          pytest -v --maxfail=1 --disable-warnings --ignore=tests/test_integration.py
+
+      - name: 🚀 Run Integration Tests
+        run: |
+          pytest -v tests/test_integration.py

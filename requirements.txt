@@ -7,9 +7,11 @@ requests
 duckdb
 joblib
 python-dotenv
+httpx
 
 # ML
 lightgbm
+scikit-learn
 cvxpy
 
 # Reporting
@@ -22,5 +24,3 @@ black
 flake8
 isort
 
-# Data fetching
-yfinance==0.2.37
