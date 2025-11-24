@@ -232,7 +232,7 @@
                 "tests/test_integration.py",
                 ".github/workflows/ci.yml"
             ],
-            "status": "blocked",
+            "status": "done",
             "priority": "high",
             "tags": [
                 "testing",
