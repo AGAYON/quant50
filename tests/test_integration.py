@@ -30,7 +30,6 @@ def mock_env():
     shutil.rmtree(temp_dir)
 
 
-@patch("app.services.data.get_latest_bars")
 @patch("app.services.data.get_all_bars")
 @patch("app.services.model.load_model")
 @patch("app.services.model.predict_scores")
@@ -43,11 +42,11 @@ def test_full_pipeline_e2e(
     mock_rebalance,
     mock_report_get_account,
     mock_get_account,
-    mock_get_positions,
+    mock_execute_get_positions,
+    mock_report_get_positions,
     mock_predict,
     mock_load_model,
     mock_get_bars,
-    mock_get_latest_bars,
     mock_env,
 ):
     # 1. Setup Mock Data
@@ -68,7 +67,6 @@ def test_full_pipeline_e2e(
     data2["symbol"] = "GOOGL"
     bars_df = pd.concat([bars_df, pd.DataFrame(data2)])
 
-    mock_get_latest_bars.return_value = bars_df
     mock_get_bars.return_value = bars_df
 
     # Mock Model
@@ -85,8 +83,8 @@ def test_full_pipeline_e2e(
     mock_predict.return_value = scores_df
 
     # Mock Execution
-    mock_get_positions.return_value = pd.DataFrame()  # No current positions
-    mock_get_positions.return_value = pd.DataFrame()  # No current positions
+    mock_execute_get_positions.return_value = pd.DataFrame()  # No current positions
+    mock_report_get_positions.return_value = pd.DataFrame()  # No current positions
     mock_get_account.return_value = {"equity": "100000", "cash": "100000"}
     mock_report_get_account.return_value = {"equity": "100000", "cash": "100000"}
     mock_rebalance.return_value = {"orders": []}
