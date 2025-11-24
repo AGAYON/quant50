@@ -2,8 +2,6 @@
 Weekly training job for Quant50 (T004G).
 
 CLI entrypoint to run the training pipeline and persist artifacts.
-This is a minimal skeleton; the full implementation will be added as
-subtasks T004A–T004H complete.
 """
 
 from __future__ import annotations
@@ -120,5 +118,5 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     raise SystemExit(main())
