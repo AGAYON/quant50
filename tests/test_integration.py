@@ -33,6 +33,7 @@ def mock_env():
 @patch("app.services.data.get_all_bars")
 @patch("app.services.model.load_model")
 @patch("app.services.model.predict_scores")
+@patch("app.services.report.get_current_positions")
 @patch("app.services.execute.get_current_positions")
 @patch("app.services.execute.get_account")
 @patch("app.services.report.get_account")
