@@ -35,9 +35,11 @@ def mock_env():
 @patch("app.services.model.predict_scores")
 @patch("app.services.execute.get_current_positions")
 @patch("app.services.execute.get_account")
+@patch("app.services.report.get_account")
 @patch("app.services.execute.rebalance_portfolio")
 def test_full_pipeline_e2e(
     mock_rebalance,
+    mock_report_get_account,
     mock_get_account,
     mock_get_positions,
     mock_predict,
@@ -80,7 +82,9 @@ def test_full_pipeline_e2e(
 
     # Mock Execution
     mock_get_positions.return_value = pd.DataFrame()  # No current positions
+    mock_get_positions.return_value = pd.DataFrame()  # No current positions
     mock_get_account.return_value = {"equity": "100000", "cash": "100000"}
+    mock_report_get_account.return_value = {"equity": "100000", "cash": "100000"}
     mock_rebalance.return_value = {"orders": []}
 
     # 2. Run Pipeline
