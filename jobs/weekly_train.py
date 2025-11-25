@@ -109,6 +109,19 @@ def main() -> int:
                 indent=2,
             )
 
+        # Save Market Snapshot for Release (T011)
+        # We need ~252 trading days for features. Saving 365 calendar days is safe.
+        snapshot_path = Path("data/market_snapshot.parquet")
+        if not bars.empty:
+            max_date = bars["timestamp"].max()
+            cutoff_date = max_date - pd.Timedelta(days=365)
+            snapshot_df = bars[bars["timestamp"] >= cutoff_date].copy()
+
+            # Ensure data directory exists
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_df.to_parquet(snapshot_path)
+            print(f"Snapshot saved to {snapshot_path} ({len(snapshot_df)} rows)")
+
     result = {
         "status": "ok",
         "timestamp": ts.isoformat(),

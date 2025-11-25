@@ -1,365 +1,101 @@
 {
-    "version": "1.0",
-    "updated": "2025-10-29",
+    "version": "2.0",
+    "updated": "2025-11-25",
     "owner": "Quant50 Backend Team",
     "tasks": [
         {
-            "id": "T001",
-            "title": "Ingesta de datos (Alpaca → DuckDB)",
-            "description": "Crear funciones en app/services/data.py para descargar precios diarios de Alpaca Market API, almacenarlos en DuckDB (data/market.duckdb) y mantener sincronización incremental.",
+            "id": "T011",
+            "title": "Weekly Snapshot & Model Registry Architecture",
+            "description": "Implementar la generación de snapshots semanales inmutables. El script weekly_train.py debe guardar 'market_snapshot.parquet' (últimos 252 días) y 'model.pkl'. Configurar GitHub Actions para publicar estos artifacts como un Release (tag: weekly-YYYY-MM-DD) y hacer force-push del modelo a una rama huérfana 'model-registry' para referencia rápida.",
             "depends_on": [],
             "files": [
-                "app/services/data.py",
-                "app/utils/config.py"
+                "jobs/weekly_train.py",
+                ".github/workflows/weekly_train.yml"
             ],
-            "status": "done",
-            "priority": "high",
-            "test": "tests/test_data.py",
+            "status": "todo",
+            "priority": "critical",
             "owner": "dev_andres",
             "tags": [
+                "architecture",
+                "snapshot",
+                "github-release"
+            ]
+        },
+        {
+            "id": "T012",
+            "title": "Daily Incremental Loader (Just-in-Time)",
+            "description": "Implementar lógica de carga incremental en 'daily_run.py'. Debe: 1) Descargar el último snapshot semanal desde GitHub Releases. 2) Consultar SOLO la barra del día actual a Alpaca. 3) Combinar en memoria para obtener los 252 días necesarios para features. NO persistir en disco local ni reconstruir histórico completo.",
+            "depends_on": [
+                "T011"
+            ],
+            "files": [
+                "app/services/data_loader.py",
+                "jobs/daily_run.py"
+            ],
+            "status": "todo",
+            "priority": "critical",
+            "tags": [
                 "data",
-                "alpaca",
-                "duckdb",
-                "ETL"
+                "etl",
+                "incremental"
             ]
         },
         {
-            "id": "T002",
-            "title": "Cálculo de features cuantitativos",
-            "description": "Generar features de momentum, volatilidad, RSI, liquidez, beta, media móvil, etc. en app/services/features.py a partir de los precios almacenados en DuckDB.",
+            "id": "T013",
+            "title": "Fail-Safe Pipeline & Error Reporting",
+            "description": "Implementar manejo de errores robusto ('Safety Halt'). Si falla cualquier paso del daily_run: 1) Cancelar TODAS las órdenes abiertas en Alpaca para asegurar estado neutro. 2) Generar un PDF de reporte indicando el error y el estado del portafolio. El sistema nunca debe fallar silenciosamente.",
             "depends_on": [
-                "T001"
-            ],
-            "files": [
-                "app/services/features.py"
-            ],
-            "status": "done",
-            "priority": "high",
-            "test": "tests/test_features.py",
-            "tags": [
-                "features",
-                "quant",
-                "pandas"
-            ]
-        },
-        {
-            "id": "T003",
-            "title": "Construcción de labels (excess returns)",
-            "description": "Construir labels de rendimiento excedente sobre benchmark para cada activo y periodo.",
-            "depends_on": [
-                "T001"
-            ],
-            "files": [
-                "app/services/label.py"
-            ],
-            "status": "done",
-            "priority": "medium",
-            "test": "tests/test_label.py",
-            "tags": [
-                "labels",
-                "finance",
-                "returns"
-            ]
-        },
-        {
-            "id": "T004",
-            "title": "Entrenamiento ML semanal (LightGBM)",
-            "description": "Implementar modelo LightGBM cross-sectional. Guardar artifacts (model.pkl, scaler.pkl).",
-            "depends_on": [
-                "T002",
-                "T003"
-            ],
-            "files": [
-                "app/services/model.py",
-                "models/"
-            ],
-            "status": "done",
-            "priority": "high",
-            "test": "tests/test_model.py",
-            "tags": [
-                "machine-learning",
-                "lightgbm",
-                "training"
-            ]
-        },
-        {
-            "id": "T005",
-            "title": "Optimización de portafolio (cvxpy)",
-            "description": "Resolver asignación de pesos robusta con Ledoit-Wolf covariance shrinkage. 50 activos, límites sectoriales y turnover.",
-            "depends_on": [
-                "T004"
-            ],
-            "files": [
-                "app/services/optimize.py"
-            ],
-            "status": "done",
-            "priority": "high",
-            "test": "tests/test_optimize.py",
-            "tags": [
-                "optimization",
-                "cvxpy",
-                "portfolio"
-            ]
-        },
-        {
-            "id": "T006",
-            "title": "Ejecución de órdenes (Alpaca Paper Trading)",
-            "description": "Implementar envío de órdenes, validación de posiciones y logging en app/services/execute.py.",
-            "depends_on": [
-                "T005"
-            ],
-            "files": [
-                "app/services/execute.py"
-            ],
-            "status": "done",
-            "priority": "high",
-            "test": "tests/test_execute.py",
-            "tags": [
-                "execution",
-                "trading",
-                "alpaca"
-            ]
-        },
-        {
-            "id": "T007",
-            "title": "Reporte PDF diario",
-            "description": "Generar PDF diario con KPIs: PnL, drawdown, turnover, top holdings, órdenes ejecutadas.",
-            "depends_on": [
-                "T004",
-                "T005",
-                "T006"
-            ],
-            "files": [
-                "app/services/report.py",
-                "data/reports/"
-            ],
-            "status": "done",
-            "priority": "medium",
-            "test": "tests/test_report.py",
-            "tags": [
-                "report",
-                "pdf",
-                "analytics"
-            ]
-        },
-        {
-            "id": "T007B",
-            "title": "Upgrade Daily Report to Desk-Ready Version",
-            "description": "Enhance report.py to produce desk-ready daily report PDF with advanced metrics, visualizations, and professional presentation.",
-            "depends_on": [
-                "T007"
-            ],
-            "files": [
-                "app/services/report.py",
-                "app/services/report_charts.py",
-                "tests/test_report.py",
-                "tests/test_report_charts.py"
-            ],
-            "status": "done",
-            "priority": "high",
-            "test": "tests/test_report_charts.py",
-            "tags": [
-                "report",
-                "visualization",
-                "metrics",
-                "desk-ready"
-            ]
-        },
-        {
-            "id": "T008",
-            "title": "Endpoints FastAPI (/run, /report, /orders)",
-            "description": "Implementar endpoints principales que orquesten las funciones de ejecución, generación de reportes y consulta de órdenes.",
-            "depends_on": [
-                "T001",
-                "T002",
-                "T003",
-                "T004",
-                "T005",
-                "T006",
-                "T007"
-            ],
-            "files": [
-                "app/main.py",
-                "app/routes.py"
-            ],
-            "status": "done",
-            "priority": "high",
-            "test": "tests/test_api.py",
-            "tags": [
-                "api",
-                "fastapi"
-            ]
-        },
-        {
-            "id": "T009",
-            "title": "Automatización con cron / GitHub Actions",
-            "description": "Programar daily_run.py (diario) y weekly_train.py (semanal) con GitHub Actions o cron local.",
-            "depends_on": [
-                "T004",
-                "T005",
-                "T006"
+                "T012"
             ],
             "files": [
                 "jobs/daily_run.py",
-                "jobs/weekly_train.py",
-                ".github/workflows/"
+                "app/services/execute.py",
+                "app/services/report.py"
             ],
-            "status": "done",
-            "priority": "medium",
-            "test": "tests/test_jobs.py",
+            "status": "todo",
+            "priority": "critical",
             "tags": [
-                "automation",
-                "ci",
+                "reliability",
+                "safety",
+                "reporting"
+            ]
+        },
+        {
+            "id": "T014",
+            "title": "Infrastructure Fixes (Secrets & Workflows)",
+            "description": "Corregir bugs en workflows de GitHub Actions. 1) Fix typo en 'ALPACA_API_SECRET_KEY' en weekly_train.yml. 2) Configurar daily_run.yml para tener permisos de lectura de Releases y descarga de artifacts.",
+            "depends_on": [
+                "T011"
+            ],
+            "files": [
+                ".github/workflows/weekly_train.yml",
+                ".github/workflows/daily_run.yml"
+            ],
+            "status": "todo",
+            "priority": "high",
+            "tags": [
+                "devops",
+                "security",
                 "github-actions"
             ]
         },
         {
-            "id": "T010",
-            "title": "Pruebas integradas y validación CI/CD",
-            "description": "Implementar pruebas E2E que validen flujo completo desde ingesta → modelo → optimización → ejecución → reporte.",
+            "id": "T015",
+            "title": "Validation Layer (Market Clock & Model Age)",
+            "description": "Agregar validaciones pre-ejecución. 1) Verificar 'get_clock()' de Alpaca: si el mercado está cerrado, abortar exitosamente ('Skipped'). 2) Verificar antigüedad del modelo: si el snapshot tiene >6 días, abortar con error (el modelo debe ser fresco de la semana).",
             "depends_on": [
-                "T001",
-                "T002",
-                "T003",
-                "T004",
-                "T005",
-                "T006",
-                "T007",
-                "T008",
-                "T009"
+                "T012"
             ],
             "files": [
-                "tests/test_integration.py",
-                ".github/workflows/ci.yml"
+                "app/services/validation.py",
+                "jobs/daily_run.py"
             ],
-            "status": "done",
+            "status": "todo",
             "priority": "high",
             "tags": [
-                "testing",
-                "integration",
-                "ci"
+                "validation",
+                "compliance"
             ]
-        },
-        {
-            "id": "T005A",
-            "title": "Audit & Enforce Dynamic Selection (T005 ↔ T006)",
-            "description": "Auditar y reforzar la selección dinámica de activos (máx 50, top-N basado en predicción), confirmar compatibilidad con ejecución (T006), y reabrir tareas si es necesario.",
-            "depends_on": [
-                "T005",
-                "T006"
-            ],
-            "files": [
-                "app/services/optimize.py",
-                "app/services/model.py",
-                "app/services/execute.py",
-                "tests/test_optimize.py",
-                "tests/test_execute.py",
-                ".taskmaster/tasks.json"
-            ],
-            "status": "done",
-            "priority": "high",
-            "owner": "taskmaster",
-            "tags": [
-                "audit",
-                "selection",
-                "optimization",
-                "execution",
-                "contracts"
-            ],
-            "instructions": {
-                "context": [
-                    "El modelo (T004) produce predicciones cross-sectional por ticker (ej. y_pred_excess).",
-                    "La optimización (T005) debe seleccionar dinámicamente los mejores activos y asignar pesos bajo restricciones (sum=1, bounds, turnover, sector cap).",
-                    "La ejecución (T006) consume un DataFrame objetivo con columnas ['symbol','weight'] y rebalancea las posiciones en Alpaca.",
-                    "La intención de negocio: si no hay suficientes activos atractivos, el portafolio puede tener <50 posiciones; nunca forzar 50 si degrada el rendimiento esperado. Máximo absoluto 50."
-                ],
-                "goals": [
-                    "Asegurar que el portafolio **selecciona dinámicamente** los mejores activos por ranking de predicción (top-N con N≤50).",
-                    "Permitir N<50 cuando las señales sean débiles (no llenar por obligación).",
-                    "Reemplazar automáticamente los tickers cuando su ranking caiga por debajo del umbral y haya candidatos mejores.",
-                    "Garantizar que el output final de T005 **suma 1.0** (capital totalmente asignado entre los seleccionados), respetando restricciones (bounds/turnover/sector).",
-                    "Confirmar que T006 consume correctamente ese output y calcula deltas BUY/SELL correctos, con redondeo a **2 decimales** en cantidades.",
-                    "Si hay incompatibilidades entre T005 y T006, reabrir la(s) tarea(s) y proponer/realizar correcciones acotadas."
-                ],
-                "ranking_policy": {
-                    "source": "Predicción T004 (ej. 'y_pred_excess' o métrica de retorno esperado).",
-                    "selection": "Ordenar descendentemente por predicción; tomar top-N con N ≤ 50.",
-                    "min_eligibility": "Permitir filtro opcional por umbral (ej. y_pred_excess > 0). Si tras el filtro quedan 0, seleccionar el mejor subconjunto posible (>=1).",
-                    "normalization": "Re-normalizar pesos al 100% entre los seleccionados antes de optimizar.",
-                    "replacement": "Si un ticker sale del top-N, su peso objetivo debe caer a 0; si uno nuevo entra, se le asigna peso sujeto a restricciones."
-                },
-                "schema_contracts": {
-                    "model_predictions": {
-                        "required_columns": [
-                            "timestamp",
-                            "symbol",
-                            "y_pred_excess"
-                        ],
-                        "notes": "Cross-sectional por fecha; una fila por (fecha, símbolo)."
-                    },
-                    "optimize_input": {
-                        "required_columns": [
-                            "symbol",
-                            "expected_return"
-                        ],
-                        "mapping": "expected_return := y_pred_excess (u otra métrica univariada equivalente)."
-                    },
-                    "optimize_output": {
-                        "required_columns": [
-                            "symbol",
-                            "weight"
-                        ],
-                        "constraints": [
-                            "sum(weight) == 1.0 (±1e-6)",
-                            "0 ≤ weight ≤ upper_bound",
-                            "cardinalidad ≤ 50",
-                            "turnover ≤ config.turnover_limit (si hay prev_weights)",
-                            "sector_caps respetados si se provee mapping"
-                        ]
-                    },
-                    "execute_input": {
-                        "required_columns": [
-                            "symbol",
-                            "weight"
-                        ],
-                        "notes": "Lo consume compute_order_deltas(); las cantidades deberán redondearse a 2 decimales antes de enviar órdenes."
-                    }
-                },
-                "acceptance_criteria": [
-                    "🔹 T005 produce un DataFrame final con ≤50 símbolos y 'weight' normalizado a 1.0.",
-                    "🔹 Si el filtro por predicción reduce a <50, no se rellena artificialmente; se reasigna capital entre los seleccionados.",
-                    "🔹 Al menos una prueba de humo confirma reemplazo: si se degrada el ranking de un símbolo previamente activo y aparece otro con mayor predicción, el nuevo portafolio objetivo **incluye** al nuevo y **excluye** al anterior.",
-                    "🔹 T006: compute_order_deltas genera 'SELL' cuando el peso objetivo < peso actual; 'BUY' cuando >; y no produce órdenes espurias cuando ya está alineado (dentro de tolerancia de redondeo).",
-                    "🔹 T006: cantidades (qty) para órdenes **redondeadas a 2 decimales**; no acepta qty negativas (long-only).",
-                    "🔹 tests/test_optimize.py y tests/test_execute.py quedan verdes sin relajar aserciones de negocio."
-                ],
-                "verification_steps": [
-                    "1) Revisar 'app/services/optimize.py' y confirmar que existe (o agregar) una fase explícita de selección: ordenar por expected_return y cortar a N≤50.",
-                    "2) Verificar que la optimización se ejecute sobre el subconjunto seleccionado y que el resultado se normalice a 1.0.",
-                    "3) Confirmar compatibilidad columnar con T006: output final de T005 son ['symbol','weight'] (float).",
-                    "4) Validar que 'app/services/execute.py' (compute_order_deltas) usa 'current_price' y 'account_value' y produce 'BUY'/'SELL' correctos, con redondeo a 2 decimales en 'delta_qty'.",
-                    "5) Correr pruebas locales focalizadas: 'pytest -q -v tests/test_optimize.py tests/test_execute.py'.",
-                    "6) Si se requiere ajuste, reabrir T005 y/o T006 en .taskmaster/tasks.json (status='in_progress'), aplicar cambios mínimos necesarios y documentar en commit.",
-                    "7) Dejar un resumen en data/reports/selection_audit_YYYYMMDD.json con: N seleccionados, top-5 símbolos por expected_return, sum(weights), flags de constraint compliance."
-                ],
-                "guardrails": [
-                    "No introducir dependencias nuevas sin actualizar requirements.",
-                    "No degradar constraints (bounds, sector caps, turnover) para pasar tests.",
-                    "No cambiar contratos de T004; sólo consumir sus predicciones.",
-                    "No marcar T006 como 'done' sin pasar tests y sin validar deltas BUY/SELL correctos."
-                ],
-                "allowed_task_state_changes": [
-                    "Si se detectan inconsistencias, marcar T005 o T006 como 'in_progress' y dejar comentario en commit.",
-                    "Una vez verificado, devolver T005 y T006 a 'done' y dejar evidencia en selection_audit_YYYYMMDD.json."
-                ],
-                "commands": [
-                    "pytest -q -v tests/test_optimize.py",
-                    "pytest -q -v tests/test_execute.py"
-                ],
-                "artifacts": [
-                    "data/reports/selection_audit_YYYYMMDD.json"
-                ]
-            }
         }
     ]
 }
