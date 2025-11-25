@@ -37,6 +37,10 @@ jobs:
           python -m json.tool .taskmaster/tasks.json
           python -m json.tool .taskmaster/memory.json
 
-      - name: 🧪 Run tests
+      - name: 🧪 Run Unit Tests
         run: |
-          pytest -v --maxfail=1 --disable-warnings
+          pytest -v --maxfail=1 --disable-warnings --ignore=tests/test_integration.py
+
+      - name: 🚀 Run Integration Tests
+        run: |
+          pytest -v tests/test_integration.py

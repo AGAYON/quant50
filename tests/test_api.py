@@ -52,7 +52,7 @@ def test_generate_report(mock_create_pdf, mock_generate_report):
     assert "Report generated" in response.json()["message"]
 
 
-@patch("app.routes.run_pipeline")
+@patch("app.services.pipeline.run_pipeline")
 def test_trigger_run(mock_run_pipeline):
     # We mock the background task function itself to verify it's called
     # But since it's a background task, we just check the response

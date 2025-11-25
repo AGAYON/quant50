@@ -204,7 +204,7 @@
                 "jobs/weekly_train.py",
                 ".github/workflows/"
             ],
-            "status": "blocked",
+            "status": "done",
             "priority": "medium",
             "test": "tests/test_jobs.py",
             "tags": [
@@ -232,34 +232,7 @@
                 "tests/test_integration.py",
                 ".github/workflows/ci.yml"
             ],
-            "status": "blocked",
-            "priority": "high",
-            "tags": [
-                "testing",
-                "integration",
-                "ci"
-            ]
-        },
-        {
-            "id": "T010",
-            "title": "Pruebas integradas y validación CI/CD",
-            "description": "Implementar pruebas E2E que validen flujo completo desde ingesta → modelo → optimización → ejecución → reporte.",
-            "depends_on": [
-                "T001",
-                "T002",
-                "T003",
-                "T004",
-                "T005",
-                "T006",
-                "T007",
-                "T008",
-                "T009"
-            ],
-            "files": [
-                "tests/test_integration.py",
-                ".github/workflows/ci.yml"
-            ],
-            "status": "blocked",
+            "status": "done",
             "priority": "high",
             "tags": [
                 "testing",
