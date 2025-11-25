@@ -2,7 +2,7 @@ name: CI - Quant50 Checks
 
 on:
   push:
-    branches: [main, dev, feature/*]
+    branches: [main, dev, feature/*, subdev]
   pull_request:
     branches: [main, dev]
 
