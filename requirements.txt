@@ -8,6 +8,7 @@ duckdb
 joblib
 python-dotenv
 httpx
+pyarrow
 
 # ML
 lightgbm

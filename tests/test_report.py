@@ -14,6 +14,7 @@ from app.services.report import (
     calculate_risk_metrics,
     create_pdf_report,
     generate_daily_report,
+    generate_error_report,
     get_account_history,
     get_recent_orders,
     get_top_holdings,
@@ -314,3 +315,15 @@ def test_calculate_order_metrics_empty():
     metrics = calculate_order_metrics(pd.DataFrame())
     assert metrics["fill_rate"] == 0.0
     assert metrics["avg_holding_period_days"] == 0.0
+
+
+@patch("app.services.report.get_account")
+def test_generate_error_report(mock_get_account, tmp_path):
+    """Test error report generation."""
+    mock_get_account.return_value = {"equity": "100000.00", "cash": "50000.00"}
+
+    output_path = tmp_path / "error_report.pdf"
+    result_path = generate_error_report("Something went wrong", str(output_path))
+
+    assert result_path == str(output_path)
+    assert output_path.exists()

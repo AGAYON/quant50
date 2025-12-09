@@ -880,3 +880,64 @@ def get_account_history_with_fallback(
             pd.DataFrame(columns=["timestamp", "equity", "cash", "buying_power"]),
             "api_failed",
         )
+
+
+def generate_error_report(error_msg: str, output_path: Optional[str] = None) -> str:
+    """
+    Generate a specific PDF report for pipeline failures.
+
+    Parameters
+    ----------
+    error_msg : str
+        Description of the error.
+    output_path : str, optional
+        Path to save the PDF.
+
+    Returns
+    -------
+    str
+        Path to the generated PDF.
+    """
+    if output_path is None:
+        date_str = datetime.now().strftime("%Y%m%d")
+        os.makedirs(REPORTS_DIR, exist_ok=True)
+        output_path = os.path.join(REPORTS_DIR, f"error_report_{date_str}.pdf")
+
+    logger.info(f"Generating ERROR report: {error_msg}")
+
+    # Get basic account info if possible
+    try:
+        account = get_account()
+        equity = float(account.get("equity", 0))
+        cash = float(account.get("cash", 0))
+    except Exception:
+        equity = 0.0
+        cash = 0.0
+
+    pdf = PDFReport()
+    pdf.add_page()
+
+    # Title (RED)
+    pdf.set_font("Arial", "B", 16)
+    pdf.set_text_color(255, 0, 0)
+    pdf.cell(0, 10, "Quant50 Pipeline FAILED", 0, 1, "C")
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(5)
+
+    # Error Details
+    pdf.section_title("Error Details")
+    pdf.set_font("Arial", "", 10)
+    pdf.multi_cell(0, 8, sanitize_text(error_msg))
+    pdf.ln(10)
+
+    # Account Status
+    pdf.section_title("Account Status (Frozen)")
+    pdf.metric_row("Equity", f"${equity:,.2f}")
+    pdf.metric_row("Cash", f"${cash:,.2f}")
+    pdf.ln(5)
+
+    pdf.set_font("Arial", "I", 10)
+    pdf.cell(0, 10, "All open orders have been cancelled (Safety Halt).", 0, 1)
+
+    pdf.output(output_path)
+    return output_path
