@@ -9,6 +9,7 @@ import pytest
 
 from app.services.execute import (
     ExecutionConfig,
+    cancel_all_orders,
     compute_order_deltas,
     get_account,
     get_current_positions,
@@ -382,3 +383,32 @@ def test_rebalance_portfolio_zero_account(mock_get_account: MagicMock):
     result = rebalance_portfolio(target_weights)
     assert result["status"] == "error"
     assert "zero" in result["error"].lower() or "negative" in result["error"].lower()
+
+
+@patch("app.services.execute.requests.delete")
+@patch("app.services.execute.requests.get")
+def test_cancel_all_orders_success(mock_get, mock_delete):
+    """Test cancelling all orders."""
+    # Mock open orders
+    mock_get.return_value = MagicMock(
+        status_code=200, json=lambda: [{"id": "1"}, {"id": "2"}]
+    )
+
+    # Mock delete response
+    mock_delete.return_value = MagicMock(status_code=207)
+
+    count = cancel_all_orders()
+    assert count == 2
+    mock_delete.assert_called_once()
+
+
+@patch("app.services.execute.requests.delete")
+@patch("app.services.execute.requests.get")
+def test_cancel_all_orders_empty(mock_get, mock_delete):
+    """Test cancelling when no orders are open."""
+    # Mock empty open orders
+    mock_get.return_value = MagicMock(status_code=200, json=lambda: [])
+
+    count = cancel_all_orders()
+    assert count == 0
+    mock_delete.assert_not_called()

@@ -2,15 +2,22 @@ import logging
 import os
 from typing import Dict
 
+import pandas as pd
+
 from app.services import data, execute, features, model, optimize, report
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 
-def run_pipeline() -> Dict[str, object]:
+def run_pipeline(bars: pd.DataFrame = None) -> Dict[str, object]:
     """
     Executes the full quantitative pipeline.
+
+    Parameters
+    ----------
+    bars : pd.DataFrame, optional
+        Pre-loaded OHLCV bars. If None, loads from DuckDB (legacy/dev mode).
 
     Returns
     -------
@@ -22,8 +29,12 @@ def run_pipeline() -> Dict[str, object]:
 
     try:
         # 1. Load Data
-        logger.info("Step 1: Loading data from DuckDB...")
-        bars = data.get_all_bars()
+        if bars is None or bars.empty:
+            logger.info("Step 1: Loading data from DuckDB (Legacy Mode)...")
+            bars = data.get_all_bars()
+        else:
+            logger.info(f"Step 1: Using injected data ({len(bars)} rows)...")
+
         if bars.empty:
             logger.warning("⚠️ No data found in DuckDB. Skipping pipeline.")
             return {"error": "No data found"}

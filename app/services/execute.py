@@ -609,3 +609,47 @@ def rebalance_portfolio(
             "status": "error",
             "error": str(e),
         }
+
+
+def cancel_all_orders() -> int:
+    """
+    Cancel all open orders. Used for Safety Halt.
+
+    Returns
+    -------
+    int
+        Number of orders cancelled (or attempted).
+    """
+    url = f"{ALPACA_BASE_URL}/v2/orders"
+    headers = _get_headers()
+
+    try:
+        # First, check if there are open orders
+        response = requests.get(
+            url, headers=headers, params={"status": "open"}, timeout=10
+        )
+        if response.status_code == 200:
+            orders = response.json()
+            if not orders:
+                logger.info("No open orders to cancel.")
+                return 0
+
+        # Cancel all
+        logger.warning(f"⚠️ Safety Halt: Cancelling {len(orders)} open orders...")
+        response = requests.delete(url, headers=headers, timeout=10)
+
+        if response.status_code == 207:  # Multi-status
+            logger.info("Cancellation request sent (207).")
+            return len(orders)
+        elif response.status_code == 204:  # No content (success)
+            logger.info("All orders cancelled successfully.")
+            return len(orders)
+        else:
+            logger.error(
+                f"Failed to cancel orders: {response.status_code} {response.text}"
+            )
+            return 0
+
+    except Exception as e:
+        logger.error(f"Error in cancel_all_orders: {e}")
+        return 0

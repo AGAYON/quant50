@@ -6,12 +6,15 @@ on:
     - cron: '0 13 * * 1-5'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   daily-run:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -26,16 +29,17 @@ jobs:
       - name: Run Daily Job
         env:
           ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
-          ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_KEY_ID }}
+          ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
           ALPACA_BASE_URL: ${{ secrets.ALPACA_BASE_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPORTS_DIR: data/reports
           DUCKDB_PATH: data/market.duckdb
         run: |
           python jobs/daily_run.py
 
       - name: Upload Report Artifact
-        if: success()
-        uses: actions/upload-artifact@v3
+        if: always() # Upload report even if job fails (Error Report)
+        uses: actions/upload-artifact@v4
         with:
           name: daily-report
           path: data/reports/
