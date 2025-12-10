@@ -34,6 +34,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPORTS_DIR: data/reports
           DUCKDB_PATH: data/market.duckdb
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           python jobs/daily_run.py
 
