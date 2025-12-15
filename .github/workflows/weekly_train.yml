@@ -32,6 +32,7 @@ jobs:
           ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
           REPORTS_DIR: data/reports
           DUCKDB_PATH: data/market.duckdb
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           python jobs/weekly_train.py
 
